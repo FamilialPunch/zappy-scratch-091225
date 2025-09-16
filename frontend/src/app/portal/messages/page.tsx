@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Card from '@/components/Card';
 
@@ -24,6 +24,8 @@ export default function MessagesPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'unread' | 'patient' | 'provider' | 'system'>('all');
+  const [contextMenu, setContextMenu] = useState<{ visible: boolean; x: number; y: number; messageId: string | null }>({ visible: false, x: 0, y: 0, messageId: null });
+  const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     // Try to get role from localStorage, but don't redirect if not found
@@ -39,6 +41,22 @@ export default function MessagesPage() {
     }
 
     fetchMessages();
+
+    // Close context menu on global click or Esc
+    const handleClick = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setContextMenu((m) => ({ ...m, visible: false }));
+      }
+    };
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setContextMenu((m) => ({ ...m, visible: false }));
+    };
+    document.addEventListener('click', handleClick);
+    document.addEventListener('keydown', handleEsc);
+    return () => {
+      document.removeEventListener('click', handleClick);
+      document.removeEventListener('keydown', handleEsc);
+    };
   }, []);
 
   const fetchMessages = async () => {
@@ -79,8 +97,52 @@ export default function MessagesPage() {
       },
     ];
     
-    setMessages(mockMessages);
+    // Merge persisted read states from localStorage
+    const persisted = localStorage.getItem('messagesReadState');
+    let merged = mockMessages;
+    if (persisted) {
+      try {
+        const map: Record<string, boolean> = JSON.parse(persisted);
+        merged = mockMessages.map((m) =>
+          map[m.id] !== undefined ? { ...m, read: map[m.id] } : m
+        );
+      } catch {}
+    }
+    setMessages(merged);
+    // Update unread count badge on load
+    const unread = merged.filter(m => !m.read).length;
+    localStorage.setItem('messagesUnreadCount', String(unread));
+    window.dispatchEvent(new CustomEvent('messagesUnreadCountChanged', { detail: unread }));
     setLoading(false);
+  };
+
+  const persistReadStates = (list: Message[]) => {
+    const map: Record<string, boolean> = {};
+    list.forEach((m) => (map[m.id] = m.read));
+    localStorage.setItem('messagesReadState', JSON.stringify(map));
+  };
+
+  const markMessage = (id: string, read: boolean) => {
+    setMessages((prev) => {
+      const updated = prev.map((m) => (m.id === id ? { ...m, read } : m));
+      persistReadStates(updated);
+      const unread = updated.filter(m => !m.read).length;
+      localStorage.setItem('messagesUnreadCount', String(unread));
+      window.dispatchEvent(new CustomEvent('messagesUnreadCountChanged', { detail: unread }));
+      return updated;
+    });
+    setContextMenu((m) => ({ ...m, visible: false }));
+  };
+
+  const markAllRead = () => {
+    setMessages((prev) => {
+      const updated = prev.map((m) => ({ ...m, read: true }));
+      persistReadStates(updated);
+      localStorage.setItem('messagesUnreadCount', '0');
+      window.dispatchEvent(new CustomEvent('messagesUnreadCountChanged', { detail: 0 }));
+      return updated;
+    });
+    setContextMenu((m) => ({ ...m, visible: false }));
   };
 
   const filteredMessages = messages.filter(message => {
@@ -198,6 +260,16 @@ export default function MessagesPage() {
               !message.read ? 'bg-blue-50' : ''
             }`}
             onClick={() => router.push(`/portal/messages/${message.id}`)}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              // Clamp menu within viewport bounds
+              const menuWidth = 192; // ~w-48
+              const menuHeight = 140; // approx height for 3 options
+              const padding = 8;
+              const x = Math.min(e.clientX, window.innerWidth - menuWidth - padding);
+              const y = Math.min(e.clientY, window.innerHeight - menuHeight - padding);
+              setContextMenu({ visible: true, x, y, messageId: message.id });
+            }}
           >
             <div className="flex items-start justify-between">
               <div className="flex-1">
@@ -244,6 +316,49 @@ export default function MessagesPage() {
           </div>
         ))}
       </Card>
+
+      {/* Context Menu */}
+      {contextMenu.visible && contextMenu.messageId && (
+        <div
+          ref={menuRef}
+          className="fixed z-50 w-48 bg-white shadow-lg rounded-md border border-gray-200 overflow-hidden"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+          onClick={(e) => e.stopPropagation()}
+          onContextMenu={(e) => {
+            // Prevent the browser menu when right-clicking inside our custom menu
+            e.preventDefault();
+            e.stopPropagation();
+          }}
+        >
+          {(() => {
+            const msg = messages.find((m) => m.id === contextMenu.messageId);
+            const isRead = !!msg?.read;
+            return (
+              <>
+                <button
+                  className="w-full text-left px-4 py-2 text-sm hover:bg-gray-100"
+                  onClick={() => markMessage(contextMenu.messageId!, !isRead)}
+                >
+                  {isRead ? 'Mark as Unread' : 'Mark as Read'}
+                </button>
+                <button
+                  className="w-full text-left px-4 py-2 text-sm hover:bg-gray-100"
+                  onClick={markAllRead}
+                >
+                  Mark all as Read
+                </button>
+                <div className="border-t border-gray-200" />
+                <button
+                  className="w-full text-left px-4 py-2 text-sm text-gray-500 hover:bg-gray-100"
+                  onClick={() => setContextMenu((m) => ({ ...m, visible: false }))}
+                >
+                  Cancel
+                </button>
+              </>
+            );
+          })()}
+        </div>
+      )}
     </div>
   );
 }

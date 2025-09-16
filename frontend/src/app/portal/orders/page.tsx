@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 type UserRole = 'provider' | 'admin' | 'provider-admin' | 'super-admin';
@@ -155,7 +155,19 @@ export default function OrdersPage() {
       }
     ];
     
-    setOrders(mockOrders);
+    // If coming back from Create Order, prepend the temporary order
+    try {
+      const last = sessionStorage.getItem('lastCreatedOrder');
+      if (last) {
+        const created = JSON.parse(last) as Order;
+        setOrders([created, ...mockOrders]);
+        sessionStorage.removeItem('lastCreatedOrder');
+      } else {
+        setOrders(mockOrders);
+      }
+    } catch {
+      setOrders(mockOrders);
+    }
     setLoading(false);
   };
 
@@ -206,6 +218,60 @@ export default function OrdersPage() {
     }
   };
 
+  // Export selected (or all filtered) orders to CSV
+  const handleExportOrders = () => {
+    try {
+      const toExport = orders.filter(o => selectedOrders.size === 0 ? filteredOrders.some(f => f.id === o.id) : selectedOrders.has(o.id));
+      if (toExport.length === 0) {
+        console.info('No orders to export');
+        return;
+      }
+      const headers = [
+        'Order Number',
+        'Patient Name',
+        'Patient Email',
+        'Status',
+        'Payment Status',
+        'Total',
+        'Date',
+        'Items Count',
+        'Fulfillment Partner',
+        'Tracking Number'
+      ];
+      const rows = toExport.map(o => [
+        o.orderNumber,
+        o.patientName,
+        o.patientEmail,
+        o.status,
+        o.paymentStatus,
+        o.total.toFixed(2),
+        new Date(o.date).toISOString(),
+        String(o.items.length),
+        o.fulfillmentPartner || '',
+        o.trackingNumber || ''
+      ]);
+      const csv = [headers, ...rows]
+        .map(r => r.map(val => {
+          const s = String(val ?? '');
+          return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+        }).join(','))
+        .join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `orders_export_${new Date().toISOString().split('T')[0]}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      // Clear selection after export
+      setSelectedOrders(new Set());
+    } catch (error) {
+      console.error('Export failed:', error);
+    }
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'pending': return 'bg-yellow-100 text-yellow-800';
@@ -252,6 +318,8 @@ export default function OrdersPage() {
 
   return (
     <div className="space-y-3">
+      {/* Success banner when redirected from Create Order */}
+      <SuccessBanner />
       {/* Compact Header */}
       <div className="flex justify-between items-center">
         <h1 className="text-xl font-semibold text-gray-900">Orders</h1>
@@ -333,7 +401,7 @@ export default function OrdersPage() {
         <div className="flex-1"></div>
 
         {/* Action Buttons */}
-        <button className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 font-medium text-gray-700">
+        <button onClick={handleExportOrders} className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 font-medium text-gray-700">
           <svg className="w-4 h-4 inline mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
           </svg>
@@ -355,7 +423,7 @@ export default function OrdersPage() {
             {selectedOrders.size} selected
           </span>
           <button className="text-sm text-gray-600 hover:text-gray-900">Print Labels</button>
-          <button className="text-sm text-gray-600 hover:text-gray-900">Export</button>
+          <button onClick={handleExportOrders} className="text-sm text-gray-600 hover:text-gray-900">Export</button>
           <button className="text-sm text-gray-600 hover:text-gray-900">Update Status</button>
           <button className="text-sm text-red-600 hover:text-red-700">Cancel</button>
           <div className="flex-1"></div>
@@ -510,6 +578,32 @@ export default function OrdersPage() {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function SuccessBanner() {
+  const [visible, setVisible] = useState(false);
+  const [orderNumber, setOrderNumber] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const created = params.get('created');
+    const ord = params.get('orderNumber');
+    if (created === '1' && ord) {
+      setOrderNumber(ord);
+      setVisible(true);
+      // Clean URL after showing banner briefly
+      const timer = setTimeout(() => setVisible(false), 4000);
+      return () => clearTimeout(timer);
+    }
+  }, []);
+
+  if (!visible) return null;
+  return (
+    <div className="bg-green-50 border border-green-200 text-green-800 px-3 py-2 rounded-lg text-sm">
+      Order {orderNumber} created successfully.
     </div>
   );
 }

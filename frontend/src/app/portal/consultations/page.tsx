@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import { useToast } from '@/hooks/useToast';
 import { useRouter } from 'next/navigation';
 
 type UserRole = 'provider' | 'admin' | 'provider-admin' | 'super-admin';
@@ -26,55 +27,7 @@ export default function ConsultationsPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedConsultations, setSelectedConsultations] = useState<Set<string>>(new Set());
   const [dateRange, setDateRange] = useState('today');
-
-  // Export selected consultations to CSV
-  const handleExportConsultations = useCallback(() => {
-    const selectedData = consultations.filter(consultation => 
-      selectedConsultations.has(consultation.id)
-    );
-
-    if (selectedData.length === 0) {
-      alert('No consultations selected for export');
-      return;
-    }
-
-    try {
-      // Create CSV content
-      const headers = ['ID', 'Patient Name', 'Type', 'Status', 'Priority', 'Date', 'Provider'];
-      const csvContent = [
-        headers.join(','),
-        ...selectedData.map(consultation => [
-          consultation.id,
-          `"${consultation.patientName}"`,
-          `"${consultation.type}"`,
-          consultation.status,
-          consultation.priority,
-          consultation.date,
-          `"${consultation.provider || 'Unassigned'}"`
-        ].join(','))
-      ].join('\n');
-
-      // Create and download file
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const link = document.createElement('a');
-      const url = URL.createObjectURL(blob);
-      link.setAttribute('href', url);
-      link.setAttribute('download', `consultations_export_${new Date().toISOString().split('T')[0]}.csv`);
-      link.style.visibility = 'hidden';
-      document.body.appendChild(link);
-      
-      link.click();
-      
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-
-      // Clear selection after export
-      setSelectedConsultations(new Set());
-    } catch (error) {
-      console.error('Export failed:', error);
-      alert('Export failed: ' + (error instanceof Error ? error.message : 'Unknown error'));
-    }
-  }, [selectedConsultations, consultations]);
+  const { info, error: errorToast } = useToast();
 
   useEffect(() => {
     // Try to get role from localStorage, but don't redirect if not found
@@ -180,6 +133,55 @@ export default function ConsultationsPage() {
     return matchesSearch && matchesFilter;
   });
 
+  // Export consultations to CSV (selected, or all filtered if none selected)
+  const handleExportConsultations = useCallback(() => {
+    const selectedData = selectedConsultations.size > 0
+      ? consultations.filter(c => selectedConsultations.has(c.id))
+      : filteredConsultations;
+
+    if (selectedData.length === 0) {
+      info('No consultations to export');
+      return;
+    }
+
+    try {
+      // Create CSV content
+      const headers = ['ID', 'Patient Name', 'Type', 'Status', 'Priority', 'Date', 'Provider'];
+      const csvContent = [
+        headers.join(','),
+        ...selectedData.map(consultation => [
+          consultation.id,
+          `"${consultation.patientName}"`,
+          `"${consultation.type}"`,
+          consultation.status,
+          consultation.priority,
+          consultation.date,
+          `"${consultation.provider || 'Unassigned'}"`
+        ].join(','))
+      ].join('\n');
+
+      // Create and download file
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `consultations_export_${new Date().toISOString().split('T')[0]}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+
+      link.click();
+
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      // Clear selection after export
+      setSelectedConsultations(new Set());
+    } catch (error) {
+      console.error('Export failed:', error);
+      errorToast('Export failed: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    }
+  }, [selectedConsultations, consultations, filteredConsultations]);
+
   const toggleConsultationSelection = (consultationId: string) => {
     const newSelection = new Set(selectedConsultations);
     if (newSelection.has(consultationId)) {
@@ -240,6 +242,8 @@ export default function ConsultationsPage() {
       <div className="flex justify-between items-center">
         <h1 className="text-xl font-semibold text-gray-900">Consultations</h1>
       </div>
+
+      {/* Toasts rendered by provider in layout */}
 
       {/* Stripe-style Filter Pills */}
       <div className="flex items-center gap-2 flex-wrap">
@@ -312,7 +316,10 @@ export default function ConsultationsPage() {
         <div className="flex-1"></div>
 
         {/* Action Buttons */}
-        <button className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 font-medium text-gray-700">
+        <button
+          onClick={handleExportConsultations}
+          className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 font-medium text-gray-700"
+        >
           <svg className="w-4 h-4 inline mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
           </svg>
@@ -320,7 +327,7 @@ export default function ConsultationsPage() {
         </button>
         
         <button 
-          onClick={() => router.push('/patient/new-consultation')}
+          onClick={() => router.push('/portal/consultations/new')}
           className="px-3 py-1.5 bg-gray-900 text-white text-sm rounded-lg hover:bg-gray-800 font-medium"
         >
           New Consultation

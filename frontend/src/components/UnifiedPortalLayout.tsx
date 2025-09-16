@@ -22,11 +22,14 @@ export default function UnifiedPortalLayout({ children }: { children: React.Reac
   const [userRole, setUserRole] = useState<UserRole>('provider');
   const [userName, setUserName] = useState('');
   const [userTitle, setUserTitle] = useState('');
+  const [messagesBadge, setMessagesBadge] = useState<number>(0);
 
   useEffect(() => {
     // Get user role from localStorage or auth context
     const storedRole = localStorage.getItem('userRole') as UserRole;
     const storedUserData = localStorage.getItem('userData');
+    const storedUnread = parseInt(localStorage.getItem('messagesUnreadCount') || '0', 10);
+    if (!Number.isNaN(storedUnread)) setMessagesBadge(storedUnread);
     
     if (storedRole) {
       setUserRole(storedRole);
@@ -43,6 +46,26 @@ export default function UnifiedPortalLayout({ children }: { children: React.Reac
       setUserName('User');
       setUserTitle('');
     }
+    // Listen for unread count updates within the app
+    const handleCustom = (e: Event) => {
+      try {
+        const detail = (e as CustomEvent).detail as number;
+        if (typeof detail === 'number') setMessagesBadge(detail);
+      } catch {}
+    };
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === 'messagesUnreadCount' && e.newValue !== null) {
+        const n = parseInt(e.newValue, 10);
+        if (!Number.isNaN(n)) setMessagesBadge(n);
+      }
+    };
+    window.addEventListener('messagesUnreadCountChanged', handleCustom as EventListener);
+    window.addEventListener('storage', handleStorage);
+
+    return () => {
+      window.removeEventListener('messagesUnreadCountChanged', handleCustom as EventListener);
+      window.removeEventListener('storage', handleStorage);
+    };
   }, [pathname]); // Re-run when pathname changes to catch navigation from login
 
   // Skip layout for login pages
@@ -83,7 +106,7 @@ export default function UnifiedPortalLayout({ children }: { children: React.Reac
       name: 'Messages',
       href: '/portal/messages',
       icon: '◒',
-      badge: 3,
+      badge: messagesBadge,
       roles: ['provider', 'admin', 'provider-admin', 'super-admin'], // All roles
       section: 'both'
     },
