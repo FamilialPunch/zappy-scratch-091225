@@ -24,10 +24,12 @@ export default function UnifiedPortalLayout({ children }: { children: React.Reac
   const [userTitle, setUserTitle] = useState('');
   const [messagesBadge, setMessagesBadge] = useState<number>(0);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [isInboxOpen, setIsInboxOpen] = useState(false);
   const [notifications, setNotifications] = useState<
     { id: string; title: string; description?: string; time?: string; href?: string; read?: boolean }[]
   >([]);
   const notifRef = useRef<HTMLDivElement | null>(null);
+  const inboxRef = useRef<HTMLDivElement | null>(null);
   const [hideSyntheticMessagesItem, setHideSyntheticMessagesItem] = useState(false);
 
   useEffect(() => {
@@ -115,6 +117,25 @@ export default function UnifiedPortalLayout({ children }: { children: React.Reac
       document.removeEventListener('keydown', onKey);
     };
   }, [isNotificationsOpen]);
+
+  // Close Inbox modal on Escape and outside click
+  useEffect(() => {
+    if (!isInboxOpen) return;
+    const onDocClick = (e: MouseEvent) => {
+      if (inboxRef.current && !inboxRef.current.contains(e.target as Node)) {
+        setIsInboxOpen(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsInboxOpen(false);
+    };
+    document.addEventListener('mousedown', onDocClick);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDocClick);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [isInboxOpen]);
 
   // Skip layout for login pages
   if (pathname?.includes('/login')) {
@@ -338,9 +359,9 @@ export default function UnifiedPortalLayout({ children }: { children: React.Reac
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
+    <div className="h-screen overflow-hidden bg-gray-50 flex">
       {/* Unified Sidebar */}
-      <div className={`${sidebarCollapsed ? 'w-16' : 'w-56'} bg-white border-r border-gray-200 transition-all duration-300 flex flex-col`}>
+      <div className={`${sidebarCollapsed ? 'w-16' : 'w-56'} h-full overflow-hidden bg-white border-r border-gray-200 transition-all duration-300 flex flex-col`}>
         {/* Logo */}
         <div className="h-16 px-4 flex items-center justify-between border-b border-gray-200">
           {!sidebarCollapsed && (
@@ -362,7 +383,7 @@ export default function UnifiedPortalLayout({ children }: { children: React.Reac
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 px-3 py-4 overflow-y-auto">
+  <nav className="flex-1 px-3 py-4 overflow-y-auto thin-scrollbar">
           {/* For Provider role - just show items without section headers */}
           {userRole === 'provider' && (
             <div className="space-y-1">
@@ -570,8 +591,8 @@ export default function UnifiedPortalLayout({ children }: { children: React.Reac
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col">
+  {/* Main Content */}
+  <div className="flex-1 flex flex-col h-full overflow-hidden">
         {/* Top Bar */}
         <header className="h-16 bg-white border-b border-gray-200">
           <div className="h-full px-6 flex items-center justify-between">
@@ -631,7 +652,7 @@ export default function UnifiedPortalLayout({ children }: { children: React.Reac
                       </button>
                     </div>
 
-                    <div className="max-h-80 overflow-y-auto">
+                    <div className="max-h-80 overflow-y-auto thin-scrollbar">
                       {effectiveNotifications.length === 0 ? (
                         <div className="px-4 py-6 text-sm text-gray-500 text-center">You're all caught up.</div>
                       ) : (
@@ -676,10 +697,10 @@ export default function UnifiedPortalLayout({ children }: { children: React.Reac
 
                     <div className="px-4 py-2 border-t border-gray-100">
                       <button
-                        onClick={() => { router.push('/portal/messages'); setIsNotificationsOpen(false); }}
+                        onClick={() => { setIsNotificationsOpen(false); setIsInboxOpen(true); }}
                         className="w-full text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-md py-2"
                       >
-                        View inbox
+                        Open inbox
                       </button>
                     </div>
                   </div>
@@ -697,9 +718,80 @@ export default function UnifiedPortalLayout({ children }: { children: React.Reac
         </header>
 
         {/* Page Content */}
-        <main className="flex-1 p-6 bg-gray-50">
+        <main className="flex-1 p-6 bg-gray-50 overflow-y-auto">
           {children}
         </main>
+
+        {/* Popup Inbox Modal */}
+        {isInboxOpen && (
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Inbox"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+          >
+            <div ref={inboxRef} className="w-full max-w-2xl max-h-[85vh] bg-white rounded-xl shadow-xl border border-gray-200 flex flex-col">
+              <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-gray-900 text-white text-xs">{messagesBadge}</span>
+                  <h2 className="text-base font-semibold text-gray-900">Inbox</h2>
+                </div>
+                <div className="flex items-center gap-3">
+                  <button onClick={markAllAsRead} className="text-xs text-gray-500 hover:text-gray-700">Mark all as read</button>
+                  <button onClick={() => setIsInboxOpen(false)} className="p-1.5 rounded hover:bg-gray-100 text-gray-500" aria-label="Close inbox">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/></svg>
+                  </button>
+                </div>
+              </div>
+              <div className="flex-1 overflow-y-auto thin-scrollbar">
+                {effectiveNotifications.length === 0 ? (
+                  <div className="p-8 text-sm text-gray-500 text-center">You're all caught up.</div>
+                ) : (
+                  <div className="divide-y divide-gray-100">
+                    {effectiveNotifications.map((n) => {
+                      const indicator = n.read ? 'bg-gray-300' : 'bg-red-400';
+                      return (
+                        <button
+                          key={n.id}
+                          onClick={() => {
+                            if (n.id === 'messages-unread') {
+                              setHideSyntheticMessagesItem(true);
+                            }
+                            if (n.href) router.push(n.href);
+                            setIsInboxOpen(false);
+                            if (n.id !== 'messages-unread') {
+                              setNotifications((prev) => {
+                                const updated = prev.map(x => x.id === n.id ? { ...x, read: true } : x);
+                                try { localStorage.setItem('notifications', JSON.stringify(updated)); } catch {}
+                                return updated;
+                              });
+                            }
+                          }}
+                          className={`w-full text-left px-5 py-4 hover:bg-gray-50 flex items-start gap-3 ${n.read ? 'opacity-80' : ''}`}
+                        >
+                          <span className={`mt-1 w-2 h-2 rounded-full ${indicator}`}></span>
+                          <div className="flex-1">
+                            <div className="text-sm text-gray-900">{n.title}</div>
+                            {n.description && (
+                              <div className="text-xs text-gray-500 mt-0.5">{n.description}</div>
+                            )}
+                            {n.time && (
+                              <div className="text-[11px] text-gray-400 mt-0.5">{n.time}</div>
+                            )}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+              <div className="px-5 py-3 border-t border-gray-100 flex items-center justify-end gap-3">
+                <Link href="/portal/messages" className="text-sm text-gray-600 hover:text-gray-900">Go to Messages</Link>
+                <button onClick={() => setIsInboxOpen(false)} className="px-3 py-1.5 text-sm bg-gray-900 text-white rounded-md hover:bg-gray-800">Close</button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

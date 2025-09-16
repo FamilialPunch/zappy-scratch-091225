@@ -57,3 +57,27 @@
     @apply bg-background text-foreground;
   }
 }
+
+@layer utilities {
+  /* Thin, subtle scrollbar utility (works in Firefox and WebKit browsers) */
+  .thin-scrollbar {
+    scrollbar-width: thin; /* Firefox */
+    scrollbar-color: rgba(100, 116, 139, 0.5) transparent; /* thumb, track */
+  }
+  .thin-scrollbar::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  .thin-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .thin-scrollbar::-webkit-scrollbar-thumb {
+    background-color: rgba(100, 116, 139, 0.4); /* slate-500-ish */
+    border-radius: 9999px;
+    border: 2px solid transparent; /* creates some padding around thumb */
+    background-clip: content-box;
+  }
+  .thin-scrollbar:hover::-webkit-scrollbar-thumb {
+    background-color: rgba(100, 116, 139, 0.6);
+  }
+}
