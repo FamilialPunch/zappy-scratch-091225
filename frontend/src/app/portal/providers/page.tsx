@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useToast } from '@/hooks/useToast';
 
 type UserRole = 'provider' | 'admin' | 'provider-admin' | 'super-admin';
 
@@ -29,6 +30,7 @@ export default function ProvidersPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedProviders, setSelectedProviders] = useState<Set<string>>(new Set());
   const [specialtyFilter, setSpecialtyFilter] = useState('');
+  const { success, error: errorToast, info } = useToast();
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -119,8 +121,24 @@ export default function ProvidersPage() {
         consultationsToday: 0
       }
     ];
-    
-    setProviders(mockProviders);
+
+    // Merge in any custom providers saved via the New Provider form
+    try {
+      const customProvidersRaw = localStorage.getItem('customProviders');
+      const customProviders: Provider[] = customProvidersRaw ? JSON.parse(customProvidersRaw) : [];
+
+      const base = [...mockProviders, ...customProviders];
+
+      // Apply any overrides saved from the Manage page
+      const overridesRaw = localStorage.getItem('providerOverrides');
+      const overrides: Record<string, Partial<Provider>> = overridesRaw ? JSON.parse(overridesRaw) : {};
+      const merged = base.map((p) => (overrides[p.id] ? { ...p, ...overrides[p.id] } : p));
+
+      setProviders(merged);
+    } catch (e) {
+      console.warn('Failed to parse providers from localStorage', e);
+      setProviders(mockProviders);
+    }
     setLoading(false);
   };
 
@@ -150,6 +168,82 @@ export default function ProvidersPage() {
     
     return matchesSearch && matchesFilter && matchesSpecialty;
   });
+
+  // Export: all providers (current filtered view)
+  const handleExportAllProviders = () => {
+    try {
+      const headers = ['ID', 'Name', 'Email', 'Specialty', 'License', 'Status', 'Patients', 'Joined Date', 'Rating', 'Today'];
+      const rows = filteredProviders.map(p => [
+        p.id,
+        p.name,
+        p.email,
+        p.specialty,
+        p.licenseNumber,
+        p.status,
+        p.patientsCount,
+        p.joinedDate,
+        p.rating ?? '',
+        p.consultationsToday ?? 0
+      ].map(toCsvValue).join(','));
+
+      const csv = [headers.join(','), ...rows].join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `providers_export_${new Date().toISOString().split('T')[0]}.csv`;
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      success(`Exported ${filteredProviders.length} providers to CSV.`);
+    } catch (e) {
+      console.error('Export providers failed', e);
+      errorToast('Export failed');
+    }
+  };
+
+  // Export: selected providers
+  const handleExportSelectedProviders = () => {
+    const selected = providers.filter(p => selectedProviders.has(p.id));
+    if (selected.length === 0) {
+      info('No providers selected for export');
+      return;
+    }
+    try {
+      const headers = ['ID', 'Name', 'Email', 'Specialty', 'License', 'Status', 'Patients', 'Joined Date', 'Rating', 'Today'];
+      const rows = selected.map(p => [
+        p.id,
+        p.name,
+        p.email,
+        p.specialty,
+        p.licenseNumber,
+        p.status,
+        p.patientsCount,
+        p.joinedDate,
+        p.rating ?? '',
+        p.consultationsToday ?? 0
+      ].map(toCsvValue).join(','));
+
+      const csv = [headers.join(','), ...rows].join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `selected_providers_export_${new Date().toISOString().split('T')[0]}.csv`;
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      setSelectedProviders(new Set());
+      success(`Exported ${selected.length} selected providers to CSV.`);
+    } catch (e) {
+      console.error('Export selected providers failed', e);
+      errorToast('Export failed');
+    }
+  };
 
   const toggleProviderSelection = (providerId: string) => {
     const newSelection = new Set(selectedProviders);
@@ -282,7 +376,9 @@ export default function ProvidersPage() {
         <div className="flex-1"></div>
 
         {/* Action Buttons */}
-        <button className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 font-medium text-gray-700">
+        <button 
+          onClick={handleExportAllProviders}
+          className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 font-medium text-gray-700">
           <svg className="w-4 h-4 inline mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
           </svg>
@@ -305,7 +401,9 @@ export default function ProvidersPage() {
           </span>
           <button className="text-sm text-gray-600 hover:text-gray-900">Activate</button>
           <button className="text-sm text-gray-600 hover:text-gray-900">Deactivate</button>
-          <button className="text-sm text-gray-600 hover:text-gray-900">Export</button>
+          <button 
+            onClick={handleExportSelectedProviders}
+            className="text-sm text-gray-600 hover:text-gray-900">Export</button>
           <button className="text-sm text-gray-600 hover:text-gray-900">Send Message</button>
           <div className="flex-1"></div>
           <button 
@@ -445,3 +543,14 @@ export default function ProvidersPage() {
     </div>
   );
 }
+
+// Export helpers
+function toCsvValue(value: unknown) {
+  if (value === null || value === undefined) return '';
+  const str = String(value);
+  // Escape quotes and wrap with quotes
+  const needsQuotes = /[",\n]/.test(str) || str.includes(',');
+  const escaped = str.replace(/"/g, '""');
+  return needsQuotes ? `"${escaped}"` : escaped;
+}
+
