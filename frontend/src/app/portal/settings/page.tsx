@@ -3,9 +3,11 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Card from '@/components/Card';
+import { useToast } from '@/hooks/useToast';
 
 export default function SettingsPage() {
   const router = useRouter();
+  const toast = useToast();
   const [activeTab, setActiveTab] = useState('general');
   
   const [generalSettings, setGeneralSettings] = useState({
@@ -74,8 +76,44 @@ export default function SettingsPage() {
     }
   }, [router]);
 
+  // Load any cached settings from localStorage on mount
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('portalSystemSettings');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed.generalSettings) setGeneralSettings((prev) => ({ ...prev, ...parsed.generalSettings }));
+        if (parsed.securitySettings) setSecuritySettings((prev) => ({ ...prev, ...parsed.securitySettings }));
+        if (parsed.aiSettings) setAiSettings((prev) => ({ ...prev, ...parsed.aiSettings }));
+        if (parsed.featureFlags) setFeatureFlags((prev) => ({ ...prev, ...parsed.featureFlags }));
+      }
+    } catch (e) {
+      // If parsing fails, ignore and continue with defaults
+      console.error('Failed to load cached settings', e);
+    }
+  }, []);
+
   const handleSaveSettings = () => {
-    alert('Settings saved successfully!');
+    try {
+      // Normalize a copy before saving (ensure numbers are numbers)
+      const normalized = {
+        generalSettings: { ...generalSettings },
+        securitySettings: {
+          ...securitySettings,
+          sessionTimeout: Number(securitySettings.sessionTimeout) || 0,
+          maxLoginAttempts: Number(securitySettings.maxLoginAttempts) || 0,
+          passwordMinLength: Number(securitySettings.passwordMinLength) || 0,
+        },
+        aiSettings: { ...aiSettings },
+        featureFlags: { ...featureFlags },
+      };
+
+      localStorage.setItem('portalSystemSettings', JSON.stringify(normalized));
+      toast.success('Settings saved');
+    } catch (e) {
+      console.error('Failed to save settings', e);
+      toast.error('Failed to save settings');
+    }
   };
 
   return (
