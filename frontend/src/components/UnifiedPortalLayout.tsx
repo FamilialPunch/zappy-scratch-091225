@@ -330,6 +330,9 @@ export default function UnifiedPortalLayout({ children }: { children: React.Reac
       try { localStorage.setItem('notifications', JSON.stringify(updated)); } catch {}
       return updated;
     });
+    // Also clear unread messages count so the bell dot disappears
+    // This ensures consistency between the synthetic Messages item and the badge state
+    clearUnreadMessages(0);
     // Hide synthetic messages item for this session until a new unread count arrives
     setHideSyntheticMessagesItem(true);
   };

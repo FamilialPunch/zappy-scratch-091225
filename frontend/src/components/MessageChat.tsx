@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { supabase, subscribeToTable, unsubscribe } from '@/lib/supabase';
 import io, { Socket } from 'socket.io-client';
 
 interface Message {
@@ -72,26 +71,13 @@ export default function MessageChat({
     // Fetch existing messages
     fetchMessages();
 
-    // Subscribe to real-time updates via Supabase
-    const channel = subscribeToTable(
-      'consultation_messages',
-      (payload) => {
-        if (payload.eventType === 'INSERT' && payload.new.consultation_id === consultationId) {
-          const newMsg = payload.new as Message;
-          if (newMsg.sender_id !== currentUserId) {
-            setMessages((prev) => [...prev, newMsg]);
-            scrollToBottom();
-          }
-        }
-      },
-      `consultation_id=eq.${consultationId}`
-    );
+    // Using Socket.io for real-time updates; Supabase realtime subscription removed
 
     return () => {
       if (socketConnection) {
         socketConnection.disconnect();
       }
-      unsubscribe(channel);
+      // Cleanup handled by socket disconnect
     };
   }, [consultationId, currentUserId, currentUserType]);
 
