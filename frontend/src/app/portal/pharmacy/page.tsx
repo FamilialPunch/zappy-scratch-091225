@@ -35,6 +35,8 @@ export default function PharmacyPage() {
   const [activeTab, setActiveTab] = useState('partners');
   const [showStateModal, setShowStateModal] = useState(false);
   const [selectedPartner, setSelectedPartner] = useState<Partner | null>(null);
+  // Local edit state for Manage States modal
+  const [editStates, setEditStates] = useState<string[]>([]);
   
   const [partners, setPartners] = useState<Partner[]>([
     {
@@ -98,9 +100,8 @@ export default function PharmacyPage() {
 
   // Add Partner Modal State
   const [showAddPartnerModal, setShowAddPartnerModal] = useState(false);
-  const [showSuccessMessage, setShowSuccessMessage] = useState(false);
-  // For popup animation
-  const [successMessageVisible, setSuccessMessageVisible] = useState(false);
+  // Reusable passive toast notification
+  const [toast, setToast] = useState<{ text: string; type: 'success' | 'info' | 'error' } | null>(null);
   const [newPartnerForm, setNewPartnerForm] = useState({
     name: '',
     type: 'Regional' as 'Primary' | 'Regional' | 'Backup',
@@ -130,6 +131,24 @@ export default function PharmacyPage() {
     'Weekend processing',
     '24/7 support'
   ];
+
+  // Helper to show passive toast messages
+  const showToast = (text: string, type: 'success' | 'info' | 'error' = 'info') => {
+    setToast({ text, type });
+    // Auto-dismiss after 3 seconds
+    setTimeout(() => setToast(null), 3000);
+  };
+
+  // Initialize editStates when opening the Manage States modal
+  useEffect(() => {
+    if (showStateModal && selectedPartner) {
+      if (selectedPartner.states.includes('ALL')) {
+        setEditStates(allStates);
+      } else {
+        setEditStates(selectedPartner.states);
+      }
+    }
+  }, [showStateModal, selectedPartner]);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -205,14 +224,8 @@ export default function PharmacyPage() {
       licensedStates: 0
     });
     setShowAddPartnerModal(false);
-    
-    // Show popup success message temporarily
-    setShowSuccessMessage(true);
-    setSuccessMessageVisible(true);
-    setTimeout(() => {
-      setSuccessMessageVisible(false);
-      setShowSuccessMessage(false);
-    }, 3000);
+    // Passive confirmation
+    showToast('Partner added successfully!', 'success');
   };
 
   const handleCapabilityToggle = (capability: string) => {
@@ -236,6 +249,13 @@ export default function PharmacyPage() {
       states: updatedStates,
       licensedStates: updatedStates.length
     });
+  };
+
+  // Toggle state selection inside Manage States modal
+  const toggleEditState = (state: string) => {
+    setEditStates((prev) =>
+      prev.includes(state) ? prev.filter((s) => s !== state) : [...prev, state]
+    );
   };
 
   if (loading) {
@@ -263,20 +283,24 @@ export default function PharmacyPage() {
       </div>
 
 
-      {/* Popup Success Message */}
-      {showSuccessMessage && successMessageVisible && (
+      {/* Passive Toast Notification */}
+      {toast && (
         <div
-          className="fixed bottom-6 right-6 z-50 bg-green-600 text-white px-6 py-4 rounded-lg shadow-lg flex items-center animate-fade-in"
+          className={`fixed bottom-6 right-6 z-50 px-6 py-4 rounded-lg shadow-lg flex items-center animate-fade-in ${
+            toast.type === 'success'
+              ? 'bg-green-600 text-white'
+              : toast.type === 'error'
+              ? 'bg-red-600 text-white'
+              : 'bg-blue-600 text-white'
+          }`}
           style={{ minWidth: '260px', transition: 'opacity 0.3s' }}
         >
-          <svg className="h-5 w-5 mr-2 text-white" viewBox="0 0 20 20" fill="currentColor">
-            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-          </svg>
-          <span className="font-medium">Partner added successfully!</span>
+          <span className="font-medium">{toast.text}</span>
           <button
-            onClick={() => { setShowSuccessMessage(false); setSuccessMessageVisible(false); }}
+            onClick={() => setToast(null)}
             className="ml-4 text-white hover:text-gray-200 focus:outline-none"
             aria-label="Dismiss"
+            title="Dismiss"
           >
             <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
               <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
@@ -381,7 +405,7 @@ export default function PharmacyPage() {
                     Manage States
                   </button>
                   <button 
-                    onClick={() => alert('Test API connection')}
+                    onClick={() => showToast('Testing API connection…', 'info')}
                     className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50"
                   >
                     Test API
@@ -601,16 +625,17 @@ export default function PharmacyPage() {
               Manage State Coverage for {selectedPartner.name}
             </h3>
             <p className="text-sm text-gray-600 mb-6">
-              Currently licensed in {selectedPartner.licensedStates} states
+              Currently licensed in {editStates.length} states
             </p>
             
             <div className="space-y-4">
               <div className="grid grid-cols-10 gap-2">
                 {allStates.map((state) => {
-                  const isActive = selectedPartner.states.includes(state) || selectedPartner.states.includes('ALL');
+                  const isActive = editStates.includes(state);
                   return (
                     <button
                       key={state}
+                      onClick={() => toggleEditState(state)}
                       className={`px-3 py-2 text-sm rounded border ${
                         isActive
                           ? 'bg-gray-900 border-gray-900 text-white'
@@ -639,8 +664,18 @@ export default function PharmacyPage() {
               </button>
               <button
                 onClick={() => {
+                  if (!selectedPartner) return;
+                  const nextStates = editStates.length === allStates.length ? ['ALL'] : [...editStates].sort();
+                  // Update partners list
+                  setPartners((prev) => prev.map((p) =>
+                    p.id === selectedPartner.id
+                      ? { ...p, states: nextStates, licensedStates: editStates.length }
+                      : p
+                  ));
+                  // Keep selectedPartner in sync
+                  setSelectedPartner((prev) => prev ? { ...prev, states: nextStates, licensedStates: editStates.length } : prev);
                   setShowStateModal(false);
-                  alert('State coverage updated!');
+                  showToast('State coverage updated!', 'success');
                 }}
                 className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800"
               >
