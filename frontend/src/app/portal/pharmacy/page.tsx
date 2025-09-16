@@ -96,7 +96,40 @@ export default function PharmacyPage() {
     weekendProcessing: false,
   });
 
+  // Add Partner Modal State
+  const [showAddPartnerModal, setShowAddPartnerModal] = useState(false);
+  const [showSuccessMessage, setShowSuccessMessage] = useState(false);
+  // For popup animation
+  const [successMessageVisible, setSuccessMessageVisible] = useState(false);
+  const [newPartnerForm, setNewPartnerForm] = useState({
+    name: '',
+    type: 'Regional' as 'Primary' | 'Regional' | 'Backup',
+    region: '',
+    apiEndpoint: '',
+    address: '',
+    city: '',
+    state: '',
+    zipCode: '',
+    phone: '',
+    email: '',
+    capabilities: [] as string[],
+    states: [] as string[],
+    licensedStates: 0
+  });
+
   const allStates = ['AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DE', 'FL', 'GA', 'HI', 'ID', 'IL', 'IN', 'IA', 'KS', 'KY', 'LA', 'ME', 'MD', 'MA', 'MI', 'MN', 'MS', 'MO', 'MT', 'NE', 'NV', 'NH', 'NJ', 'NM', 'NY', 'NC', 'ND', 'OH', 'OK', 'OR', 'PA', 'RI', 'SC', 'SD', 'TN', 'TX', 'UT', 'VT', 'VA', 'WA', 'WV', 'WI', 'WY'];
+
+  const availableCapabilities = [
+    'Same-day processing',
+    'Next-day delivery',
+    'Cold chain',
+    'Controlled substances',
+    'Compounding',
+    'Mail order',
+    'Specialty medications',
+    'Weekend processing',
+    '24/7 support'
+  ];
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -132,6 +165,79 @@ export default function PharmacyPage() {
     ));
   };
 
+  const handleAddPartner = () => {
+    // Generate new ID
+    const newId = Math.max(...partners.map(p => p.id)) + 1;
+    
+    // Create new partner object
+    const newPartner: Partner = {
+      id: newId,
+      name: newPartnerForm.name,
+      type: newPartnerForm.type as 'Primary' | 'Regional' | 'Backup',
+      status: 'standby',
+      region: newPartnerForm.region,
+      avgFulfillmentTime: '3.0 days', // Default for new partners
+      successRate: '0%', // Will be calculated as orders are processed
+      monthlyVolume: 0,
+      apiEndpoint: newPartnerForm.apiEndpoint,
+      capabilities: newPartnerForm.capabilities,
+      states: newPartnerForm.states,
+      licensedStates: newPartnerForm.licensedStates
+    };
+
+    // Add to partners list
+    setPartners([...partners, newPartner]);
+
+    // Reset form and close modal
+    setNewPartnerForm({
+      name: '',
+      type: 'Regional' as 'Primary' | 'Regional' | 'Backup',
+      region: '',
+      apiEndpoint: '',
+      address: '',
+      city: '',
+      state: '',
+      zipCode: '',
+      phone: '',
+      email: '',
+      capabilities: [] as string[],
+      states: [] as string[],
+      licensedStates: 0
+    });
+    setShowAddPartnerModal(false);
+    
+    // Show popup success message temporarily
+    setShowSuccessMessage(true);
+    setSuccessMessageVisible(true);
+    setTimeout(() => {
+      setSuccessMessageVisible(false);
+      setShowSuccessMessage(false);
+    }, 3000);
+  };
+
+  const handleCapabilityToggle = (capability: string) => {
+    const updatedCapabilities = newPartnerForm.capabilities.includes(capability)
+      ? newPartnerForm.capabilities.filter(cap => cap !== capability)
+      : [...newPartnerForm.capabilities, capability];
+    
+    setNewPartnerForm({
+      ...newPartnerForm,
+      capabilities: updatedCapabilities
+    });
+  };
+
+  const handleStateToggle = (state: string) => {
+    const updatedStates = newPartnerForm.states.includes(state)
+      ? newPartnerForm.states.filter(st => st !== state)
+      : [...newPartnerForm.states, state];
+    
+    setNewPartnerForm({
+      ...newPartnerForm,
+      states: updatedStates,
+      licensedStates: updatedStates.length
+    });
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -149,12 +255,35 @@ export default function PharmacyPage() {
           <p className="text-gray-600 mt-1">Configure fulfillment partners and settings</p>
         </div>
         <button
-          onClick={() => alert('Add partner functionality')}
+          onClick={() => setShowAddPartnerModal(true)}
           className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition"
         >
           Add Partner
         </button>
       </div>
+
+
+      {/* Popup Success Message */}
+      {showSuccessMessage && successMessageVisible && (
+        <div
+          className="fixed bottom-6 right-6 z-50 bg-green-600 text-white px-6 py-4 rounded-lg shadow-lg flex items-center animate-fade-in"
+          style={{ minWidth: '260px', transition: 'opacity 0.3s' }}
+        >
+          <svg className="h-5 w-5 mr-2 text-white" viewBox="0 0 20 20" fill="currentColor">
+            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+          </svg>
+          <span className="font-medium">Partner added successfully!</span>
+          <button
+            onClick={() => { setShowSuccessMessage(false); setSuccessMessageVisible(false); }}
+            className="ml-4 text-white hover:text-gray-200 focus:outline-none"
+            aria-label="Dismiss"
+          >
+            <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+            </svg>
+          </button>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="border-b border-gray-200">
@@ -516,6 +645,194 @@ export default function PharmacyPage() {
                 className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800"
               >
                 Save Changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Partner Modal */}
+      {showAddPartnerModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <h3 className="text-lg font-semibold mb-6">Add New Pharmacy Partner</h3>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Basic Information */}
+              <div className="space-y-4">
+                <h4 className="font-medium text-gray-900">Basic Information</h4>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Partner Name *</label>
+                  <input
+                    type="text"
+                    value={newPartnerForm.name}
+                    onChange={(e) => setNewPartnerForm({...newPartnerForm, name: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500"
+                    placeholder="e.g., ABC Pharmacy Network"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Partner Type *</label>
+                  <select
+                    value={newPartnerForm.type}
+                    onChange={(e) => setNewPartnerForm({...newPartnerForm, type: e.target.value as 'Primary' | 'Regional' | 'Backup'})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500"
+                  >
+                    <option value="Primary">Primary</option>
+                    <option value="Regional">Regional</option>
+                    <option value="Backup">Backup</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Service Region *</label>
+                  <input
+                    type="text"
+                    value={newPartnerForm.region}
+                    onChange={(e) => setNewPartnerForm({...newPartnerForm, region: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500"
+                    placeholder="e.g., West Coast, National, Southeast"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">API Endpoint *</label>
+                  <input
+                    type="url"
+                    value={newPartnerForm.apiEndpoint}
+                    onChange={(e) => setNewPartnerForm({...newPartnerForm, apiEndpoint: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500"
+                    placeholder="https://api.partner.com/v1"
+                  />
+                </div>
+              </div>
+
+              {/* Contact Information */}
+              <div className="space-y-4">
+                <h4 className="font-medium text-gray-900">Contact Information</h4>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
+                  <input
+                    type="text"
+                    value={newPartnerForm.address}
+                    onChange={(e) => setNewPartnerForm({...newPartnerForm, address: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500"
+                    placeholder="Street address"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">City</label>
+                    <input
+                      type="text"
+                      value={newPartnerForm.city}
+                      onChange={(e) => setNewPartnerForm({...newPartnerForm, city: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">State</label>
+                    <select
+                      value={newPartnerForm.state}
+                      onChange={(e) => setNewPartnerForm({...newPartnerForm, state: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500"
+                    >
+                      <option value="">Select State</option>
+                      {allStates.map(state => (
+                        <option key={state} value={state}>{state}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">ZIP Code</label>
+                    <input
+                      type="text"
+                      value={newPartnerForm.zipCode}
+                      onChange={(e) => setNewPartnerForm({...newPartnerForm, zipCode: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+                    <input
+                      type="tel"
+                      value={newPartnerForm.phone}
+                      onChange={(e) => setNewPartnerForm({...newPartnerForm, phone: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                  <input
+                    type="email"
+                    value={newPartnerForm.email}
+                    onChange={(e) => setNewPartnerForm({...newPartnerForm, email: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Capabilities */}
+            <div className="mt-6">
+              <h4 className="font-medium text-gray-900 mb-3">Capabilities</h4>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                {availableCapabilities.map((capability) => (
+                  <label key={capability} className="flex items-center space-x-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={newPartnerForm.capabilities.includes(capability)}
+                      onChange={() => handleCapabilityToggle(capability)}
+                      className="rounded border-gray-300"
+                    />
+                    <span className="text-sm text-gray-700">{capability}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* Licensed States */}
+            <div className="mt-6">
+              <h4 className="font-medium text-gray-900 mb-3">Licensed States ({newPartnerForm.licensedStates} selected)</h4>
+              <div className="grid grid-cols-10 gap-2 max-h-40 overflow-y-auto">
+                {allStates.map((state) => (
+                  <button
+                    key={state}
+                    onClick={() => handleStateToggle(state)}
+                    className={`px-3 py-2 text-sm rounded border ${
+                      newPartnerForm.states.includes(state)
+                        ? 'bg-gray-900 border-gray-900 text-white'
+                        : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'
+                    }`}
+                  >
+                    {state}
+                  </button>
+                ))}
+              </div>
+            </div>
+            
+            <div className="flex justify-end space-x-3 mt-8">
+              <button
+                onClick={() => setShowAddPartnerModal(false)}
+                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleAddPartner}
+                disabled={!newPartnerForm.name || !newPartnerForm.region || !newPartnerForm.apiEndpoint}
+                className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 disabled:bg-gray-400 disabled:cursor-not-allowed"
+              >
+                Add Partner
               </button>
             </div>
           </div>
