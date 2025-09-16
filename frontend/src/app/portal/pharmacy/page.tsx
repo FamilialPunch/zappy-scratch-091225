@@ -97,11 +97,23 @@ export default function PharmacyPage() {
     batchProcessingTime: '14:00',
     weekendProcessing: false,
   });
+  const [savingProcessing, setSavingProcessing] = useState(false);
 
   // Add Partner Modal State
   const [showAddPartnerModal, setShowAddPartnerModal] = useState(false);
+  // Edit Shipping Zone Modal State
+  const [showEditZoneModal, setShowEditZoneModal] = useState(false);
+  const [editingZoneIndex, setEditingZoneIndex] = useState<number | null>(null);
+  const [zoneForm, setZoneForm] = useState<ShippingZone>({ zone: '', states: '', baseRate: 0, estimatedDays: '' });
+  // Add Shipping Zone Modal State
+  const [showAddZoneModal, setShowAddZoneModal] = useState(false);
+  // Delete Shipping Zone Modal State
+  const [showDeleteZoneModal, setShowDeleteZoneModal] = useState(false);
+  const [deletingZoneIndex, setDeletingZoneIndex] = useState<number | null>(null);
   // Reusable passive toast notification
   const [toast, setToast] = useState<{ text: string; type: 'success' | 'info' | 'error' } | null>(null);
+  // Local selection state for Edit Shipping Zone modal
+  const [editZoneStates, setEditZoneStates] = useState<string[]>([]);
   const [newPartnerForm, setNewPartnerForm] = useState({
     name: '',
     type: 'Regional' as 'Primary' | 'Regional' | 'Backup',
@@ -139,6 +151,17 @@ export default function PharmacyPage() {
     setTimeout(() => setToast(null), 3000);
   };
 
+  // Initialize Edit Shipping Zone state selection from zoneForm.states when modal opens
+  useEffect(() => {
+    if (showEditZoneModal) {
+      const parsed = zoneForm.states
+        .split(',')
+        .map((s) => s.trim().toUpperCase())
+        .filter((s) => allStates.includes(s));
+      setEditZoneStates(parsed);
+    }
+  }, [showEditZoneModal, zoneForm.states]);
+
   // Initialize editStates when opening the Manage States modal
   useEffect(() => {
     if (showStateModal && selectedPartner) {
@@ -169,12 +192,47 @@ export default function PharmacyPage() {
     // Admin, provider-admin, and super-admin can access
     if (role === 'admin' || role === 'provider-admin' || role === 'super-admin') {
       setUserRole(role);
+      // Load saved processing settings if available
+      try {
+        const saved = localStorage.getItem('processingSettings');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          setProcessingSettings((prev) => ({
+            ...prev,
+            ...parsed,
+          }));
+        }
+      } catch (e) {
+        console.warn('Failed to load processing settings from storage');
+      }
       setLoading(false);
     } else {
       // Default redirect if no valid role
       router.push('/portal/dashboard');
     }
   }, [router]);
+
+  const handleSaveProcessingSettings = () => {
+    // Basic normalization and safety checks
+    const normalized = {
+      ...processingSettings,
+      priorityThreshold: Math.max(0, Number(processingSettings.priorityThreshold) || 0),
+      maxRetries: Math.max(0, Number(processingSettings.maxRetries) || 0),
+      batchProcessingTime: processingSettings.batchProcessingTime || '14:00',
+      weekendProcessing: !!processingSettings.weekendProcessing,
+    };
+
+    setProcessingSettings(normalized);
+    setSavingProcessing(true);
+    try {
+      localStorage.setItem('processingSettings', JSON.stringify(normalized));
+      showToast('Processing settings saved.', 'success');
+    } catch (e) {
+      showToast('Failed to save settings. Please try again.', 'error');
+    } finally {
+      setSavingProcessing(false);
+    }
+  };
 
   const handleTogglePartnerStatus = (partnerId: number) => {
     setPartners(partners.map(p => 
@@ -421,7 +479,19 @@ export default function PharmacyPage() {
       {activeTab === 'shipping' && (
         <Card className="overflow-hidden">
           <div className="p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Shipping Zones Configuration</h2>
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-gray-900">Shipping Zones Configuration</h2>
+              <button
+                onClick={() => {
+                  setZoneForm({ zone: '', states: '', baseRate: 0, estimatedDays: '' });
+                  setEditZoneStates([]);
+                  setShowAddZoneModal(true);
+                }}
+                className="px-3 py-2 text-sm bg-gray-900 text-white rounded hover:bg-gray-800"
+              >
+                Add Zone
+              </button>
+            </div>
             
             <div className="overflow-x-auto">
               <table className="w-full">
@@ -450,7 +520,27 @@ export default function PharmacyPage() {
                         {zone.estimatedDays} days
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        <button className="text-gray-600 hover:text-gray-900">Edit</button>
+                        <div className="flex items-center gap-3">
+                          <button
+                            className="text-gray-600 hover:text-gray-900"
+                            onClick={() => {
+                              setEditingZoneIndex(index);
+                              setZoneForm({ ...zone });
+                              setShowEditZoneModal(true);
+                            }}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            className="text-red-600 hover:text-red-800"
+                            onClick={() => {
+                              setDeletingZoneIndex(index);
+                              setShowDeleteZoneModal(true);
+                            }}
+                          >
+                            Delete
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -465,6 +555,226 @@ export default function PharmacyPage() {
             </div>
           </div>
         </Card>
+      )}
+
+      {/* Add Shipping Zone Modal */}
+      {showAddZoneModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-xl">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Add Shipping Zone</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Zone Name</label>
+                <input
+                  type="text"
+                  value={zoneForm.zone}
+                  onChange={(e) => setZoneForm({ ...zoneForm, zone: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500"
+                />
+              </div>
+              <div>
+                <div className="flex items-baseline justify-between mb-1">
+                  <label className="block text-sm font-medium text-gray-700">States Covered</label>
+                  <span className="text-xs text-gray-500">{editZoneStates.length} selected</span>
+                </div>
+                <div className="grid grid-cols-10 gap-2 max-h-40 overflow-y-auto border rounded p-2">
+                  {allStates.map((state) => {
+                    const active = editZoneStates.includes(state);
+                    return (
+                      <button
+                        key={state}
+                        type="button"
+                        onClick={() =>
+                          setEditZoneStates((prev) =>
+                            prev.includes(state) ? prev.filter((s) => s !== state) : [...prev, state]
+                          )
+                        }
+                        className={`px-2 py-1 text-xs rounded border ${
+                          active
+                            ? 'bg-gray-900 border-gray-900 text-white'
+                            : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'
+                        }`}
+                        title={state}
+                      >
+                        {state}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-xs text-gray-500 mt-2">Use the buttons to select states for this shipping zone.</p>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Base Rate ($)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={zoneForm.baseRate}
+                    onChange={(e) => setZoneForm({ ...zoneForm, baseRate: parseFloat(e.target.value) || 0 })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Estimated Days</label>
+                  <input
+                    type="text"
+                    value={zoneForm.estimatedDays}
+                    onChange={(e) => setZoneForm({ ...zoneForm, estimatedDays: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500"
+                    placeholder="e.g., 1-2"
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end space-x-3 mt-6">
+              <button
+                onClick={() => setShowAddZoneModal(false)}
+                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  const statesString = editZoneStates.sort().join(', ');
+                  setShippingZones((prev) => [...prev, { ...zoneForm, states: statesString }]);
+                  setShowAddZoneModal(false);
+                  showToast('Shipping zone added!', 'success');
+                }}
+                className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800"
+              >
+                Add Zone
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Shipping Zone Confirmation */}
+      {showDeleteZoneModal && deletingZoneIndex !== null && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Delete Shipping Zone</h3>
+            <p className="text-sm text-gray-600">
+              Are you sure you want to delete
+              {` "${shippingZones[deletingZoneIndex].zone}"`}?
+              This action cannot be undone.
+            </p>
+            <div className="flex justify-end space-x-3 mt-6">
+              <button
+                onClick={() => setShowDeleteZoneModal(false)}
+                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  setShippingZones((prev) => prev.filter((_, i) => i !== deletingZoneIndex));
+                  setShowDeleteZoneModal(false);
+                  setDeletingZoneIndex(null);
+                  showToast('Shipping zone deleted.', 'success');
+                }}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Shipping Zone Modal */}
+      {showEditZoneModal && editingZoneIndex !== null && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-xl">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Edit Shipping Zone</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Zone Name</label>
+                <input
+                  type="text"
+                  value={zoneForm.zone}
+                  onChange={(e) => setZoneForm({ ...zoneForm, zone: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500"
+                />
+              </div>
+              <div>
+                <div className="flex items-baseline justify-between mb-1">
+                  <label className="block text-sm font-medium text-gray-700">States Covered</label>
+                  <span className="text-xs text-gray-500">{editZoneStates.length} selected</span>
+                </div>
+                <div className="grid grid-cols-10 gap-2 max-h-40 overflow-y-auto border rounded p-2">
+                  {allStates.map((state) => {
+                    const active = editZoneStates.includes(state);
+                    return (
+                      <button
+                        key={state}
+                        type="button"
+                        onClick={() =>
+                          setEditZoneStates((prev) =>
+                            prev.includes(state) ? prev.filter((s) => s !== state) : [...prev, state]
+                          )
+                        }
+                        className={`px-2 py-1 text-xs rounded border ${
+                          active
+                            ? 'bg-gray-900 border-gray-900 text-white'
+                            : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'
+                        }`}
+                        title={state}
+                      >
+                        {state}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-xs text-gray-500 mt-2">Use the buttons to select states for this shipping zone.</p>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Base Rate ($)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={zoneForm.baseRate}
+                    onChange={(e) => setZoneForm({ ...zoneForm, baseRate: parseFloat(e.target.value) || 0 })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Estimated Days</label>
+                  <input
+                    type="text"
+                    value={zoneForm.estimatedDays}
+                    onChange={(e) => setZoneForm({ ...zoneForm, estimatedDays: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500"
+                    placeholder="e.g., 1-2"
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end space-x-3 mt-6">
+              <button
+                onClick={() => setShowEditZoneModal(false)}
+                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  if (editingZoneIndex === null) return;
+                  const statesString = editZoneStates.length > 0 ? editZoneStates.sort().join(', ') : zoneForm.states.trim();
+                  setShippingZones((prev) =>
+                    prev.map((z, i) => (i === editingZoneIndex ? { ...zoneForm, states: statesString } : z))
+                  );
+                  setShowEditZoneModal(false);
+                  showToast('Shipping zone updated!', 'success');
+                }}
+                className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800"
+              >
+                Save Changes
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Processing Settings Tab */}
@@ -554,8 +864,12 @@ export default function PharmacyPage() {
             </div>
 
             <div className="pt-4">
-              <button className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800">
-                Save Settings
+              <button
+                onClick={handleSaveProcessingSettings}
+                disabled={savingProcessing}
+                className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 disabled:bg-gray-400 disabled:cursor-not-allowed"
+              >
+                {savingProcessing ? 'Saving…' : 'Save Settings'}
               </button>
             </div>
           </div>
