@@ -34,6 +34,7 @@ export default function TreatmentPlansPage() {
   const [loading, setLoading] = useState(true);
   const [editingPlan, setEditingPlan] = useState<TreatmentPlan | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [newPlan, setNewPlan] = useState<TreatmentPlan | null>(null);
 
   // Load plans from backend
   useEffect(() => {
@@ -240,6 +241,22 @@ export default function TreatmentPlansPage() {
     }
   };
 
+  const handleCreatePlan = async () => {
+    if (!newPlan) return;
+    try {
+      // In production, call POST /api/treatment-plans
+      // const res = await fetch('/api/treatment-plans', { method: 'POST', body: JSON.stringify(newPlan) });
+      // const created = await res.json();
+      const generatedId = `${newPlan.condition}-${newPlan.plan_tier}-${Date.now()}`;
+      const created = { ...newPlan, id: generatedId };
+      setPlans((prev) => [...prev, created]);
+      setShowAddModal(false);
+      setNewPlan(null);
+    } catch (error) {
+      console.error('Error creating plan:', error);
+    }
+  };
+
   const handleSavePlan = async () => {
     if (!editingPlan) return;
     
@@ -284,7 +301,21 @@ export default function TreatmentPlansPage() {
           <p className="text-gray-600 mt-1">Manage condition-specific treatment plans and pricing</p>
         </div>
         <button
-          onClick={() => setShowAddModal(true)}
+          onClick={() => {
+            setNewPlan({
+              id: '',
+              condition: selectedCondition,
+              plan_tier: 'basic',
+              name: '',
+              price: 0,
+              billing_period: 'month',
+              features: [''],
+              medications: [],
+              is_popular: false,
+              active_subscribers: 0,
+            });
+            setShowAddModal(true);
+          }}
           className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition"
         >
           Add New Plan
@@ -324,7 +355,7 @@ export default function TreatmentPlansPage() {
               className={`p-6 relative ${plan.is_popular ? 'ring-2 ring-blue-500' : ''}`}
             >
               {plan.is_popular && (
-                <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
+                <div className="absolute top-2 left-1/2 transform -translate-x-1/2">
                   <span className="bg-blue-500 text-white px-3 py-1 rounded-full text-xs font-semibold">
                     MOST POPULAR
                   </span>
@@ -537,6 +568,144 @@ export default function TreatmentPlansPage() {
                 className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800"
               >
                 Save Changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Modal */}
+      {showAddModal && newPlan && (
+        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto">
+            <h2 className="text-lg font-semibold mb-4">Add New Plan</h2>
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Condition</label>
+                  <select
+                    value={newPlan.condition}
+                    onChange={(e) => setNewPlan({ ...newPlan, condition: e.target.value })}
+                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500"
+                  >
+                    {CONDITIONS.map((c) => (
+                      <option key={c.value} value={c.value}>{c.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Plan Name</label>
+                  <input
+                    type="text"
+                    value={newPlan.name}
+                    onChange={(e) => setNewPlan({ ...newPlan, name: e.target.value })}
+                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Tier</label>
+                  <select
+                    value={newPlan.plan_tier}
+                    onChange={(e) => setNewPlan({ ...newPlan, plan_tier: e.target.value as any })}
+                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500"
+                  >
+                    <option value="basic">Basic</option>
+                    <option value="standard">Standard</option>
+                    <option value="premium">Premium</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Billing Period</label>
+                  <select
+                    value={newPlan.billing_period}
+                    onChange={(e) => setNewPlan({ ...newPlan, billing_period: e.target.value })}
+                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500"
+                  >
+                    <option value="month">Monthly</option>
+                    <option value="dose">Per Dose</option>
+                    <option value="one-time">One Time</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Price</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={newPlan.price}
+                    onChange={(e) => setNewPlan({ ...newPlan, price: parseFloat(e.target.value || '0') })}
+                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500"
+                  />
+                </div>
+                <div className="flex items-center pt-6">
+                  <input
+                    type="checkbox"
+                    id="add-popular"
+                    checked={newPlan.is_popular}
+                    onChange={(e) => setNewPlan({ ...newPlan, is_popular: e.target.checked })}
+                    className="h-4 w-4 text-gray-900 focus:ring-gray-500 border-gray-300 rounded"
+                  />
+                  <label htmlFor="add-popular" className="ml-2 block text-sm text-gray-900">
+                    Mark as Most Popular
+                  </label>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Features</label>
+                {newPlan.features.map((feature, index) => (
+                  <div key={index} className="flex mb-2">
+                    <input
+                      type="text"
+                      value={feature}
+                      onChange={(e) => {
+                        const newFeatures = [...newPlan.features];
+                        newFeatures[index] = e.target.value;
+                        setNewPlan({ ...newPlan, features: newFeatures });
+                      }}
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500"
+                    />
+                    <button
+                      onClick={() => {
+                        const newFeatures = newPlan.features.filter((_, i) => i !== index);
+                        setNewPlan({ ...newPlan, features: newFeatures.length ? newFeatures : [''] });
+                      }}
+                      className="ml-2 text-red-600 hover:text-red-800"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
+                <button
+                  onClick={() => setNewPlan({
+                    ...newPlan,
+                    features: [...newPlan.features, '']
+                  })}
+                  className="text-sm text-gray-600 hover:text-gray-900"
+                >
+                  + Add Feature
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end space-x-3">
+              <button
+                onClick={() => { setShowAddModal(false); setNewPlan(null); }}
+                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCreatePlan}
+                className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800"
+                disabled={!newPlan.name || newPlan.price < 0}
+              >
+                Create Plan
               </button>
             </div>
           </div>

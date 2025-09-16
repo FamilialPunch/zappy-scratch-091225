@@ -1,25 +1,27 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Card from '@/components/Card';
 import { 
   treatmentProtocols, 
   conditionDisplayNames,
-  calculateProtocolCost,
-  getAllConditions
+  calculateProtocolCost
 } from '@/lib/treatment-protocols';
+import { useToast } from '@/hooks/useToast';
 
 export default function ProtocolsPage() {
   const router = useRouter();
+  const { success, error: errorToast } = useToast();
   const [loading, setLoading] = useState(true);
+  const [protocolsData, setProtocolsData] = useState<any>(treatmentProtocols);
   const [selectedCondition, setSelectedCondition] = useState('');
   const [selectedProtocol, setSelectedProtocol] = useState<any>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingProtocol, setEditingProtocol] = useState<any>(null);
-
-  const conditions = getAllConditions();
+  const [isAdding, setIsAdding] = useState(false);
+  const conditions = useMemo(() => Object.keys(protocolsData), [protocolsData]);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -47,48 +49,102 @@ export default function ProtocolsPage() {
   }, [router]);
 
   const handleEditProtocol = (condition: string, protocolKey: string, protocol: any) => {
+    setIsAdding(false);
     setEditingProtocol({
       condition,
+      originalCondition: condition,
       protocolKey,
       ...protocol
     });
     setShowEditModal(true);
   };
 
+  const slugify = (s: string) =>
+    s
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)/g, '')
+      .slice(0, 50) || `protocol-${Date.now()}`;
+
+  const generateUniqueKey = (baseName: string, existing: Record<string, any>) => {
+    let key = slugify(baseName);
+    if (!existing[key]) return key;
+    let i = 1;
+    while (existing[`${key}-${i}`]) i++;
+    return `${key}-${i}`;
+  };
+
   const handleSaveProtocol = () => {
-    // Save protocol logic
-    alert('Protocol saved successfully!');
+    if (!editingProtocol) return;
+    const {
+      name,
+      description,
+      duration,
+      followUp,
+      medications = [],
+      protocolKey,
+      condition,
+      originalCondition
+    } = editingProtocol;
+
+    if (!name || !condition) {
+      errorToast('Please provide a name and condition.');
+      return;
+    }
+
+    const total = calculateProtocolCost(medications);
+
+    setProtocolsData((prev: any) => {
+      const next: any = { ...prev };
+      const fromCond = originalCondition || condition;
+      const toCond = condition;
+      if (!next[toCond]) next[toCond] = {};
+
+      // If moving between conditions, remove from old
+      if (protocolKey && fromCond !== toCond && next[fromCond]?.[protocolKey]) {
+        const { [protocolKey]: _, ...rest } = next[fromCond];
+        next[fromCond] = rest;
+      }
+
+      const key = protocolKey || generateUniqueKey(name, next[toCond]);
+      next[toCond] = {
+        ...next[toCond],
+        [key]: { name, description, duration, followUp, medications, total }
+      };
+      return next;
+    });
+
+    success(isAdding ? 'Protocol added successfully.' : 'Protocol saved successfully.');
     setShowEditModal(false);
     setEditingProtocol(null);
+    setIsAdding(false);
   };
 
   const calculateTotalProtocols = () => {
     return conditions.reduce((total, condition) => {
-      const protocols = treatmentProtocols[condition as keyof typeof treatmentProtocols];
-      return total + Object.keys(protocols).length;
+      const protocols = protocolsData[condition as keyof typeof protocolsData];
+      return total + Object.keys(protocols || {}).length;
     }, 0);
   };
 
   const getFilteredProtocols = () => {
-    if (!searchTerm) return treatmentProtocols;
-    
+    if (!searchTerm) return protocolsData;
     const filtered: any = {};
     conditions.forEach(condition => {
-      const protocols = treatmentProtocols[condition as keyof typeof treatmentProtocols];
+      const protocols = protocolsData[condition as keyof typeof protocolsData] || {};
       const filteredProtocols: any = {};
-      
       Object.entries(protocols).forEach(([key, protocol]: [string, any]) => {
-        if (protocol.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            protocol.description.toLowerCase().includes(searchTerm.toLowerCase())) {
+        if (
+          protocol.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          protocol.description.toLowerCase().includes(searchTerm.toLowerCase())
+        ) {
           filteredProtocols[key] = protocol;
         }
       });
-      
       if (Object.keys(filteredProtocols).length > 0) {
         filtered[condition] = filteredProtocols;
       }
     });
-    
     return filtered;
   };
 
@@ -111,7 +167,22 @@ export default function ProtocolsPage() {
           <p className="text-gray-600 mt-1">Comprehensive treatment protocols for all conditions</p>
         </div>
         <button
-          onClick={() => alert('Add new protocol')}
+          onClick={() => {
+            const defaultCondition = selectedCondition || conditions[0] || '';
+            setIsAdding(true);
+            setEditingProtocol({
+              condition: defaultCondition,
+              originalCondition: defaultCondition,
+              protocolKey: '',
+              name: '',
+              description: '',
+              duration: '',
+              followUp: '',
+              medications: [],
+              total: 0
+            });
+            setShowEditModal(true);
+          }}
           className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition"
         >
           Add Protocol
@@ -286,6 +357,20 @@ export default function ProtocolsPage() {
             
             <div className="space-y-4">
               <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Condition</label>
+                <select
+                  value={editingProtocol.condition}
+                  onChange={(e) => setEditingProtocol({ ...editingProtocol, condition: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500"
+                >
+                  {conditions.map((cond) => (
+                    <option key={cond} value={cond}>
+                      {conditionDisplayNames[cond] || cond}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Protocol Name</label>
                 <input
                   type="text"
@@ -456,7 +541,7 @@ export default function ProtocolsPage() {
                 onClick={handleSaveProtocol}
                 className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800"
               >
-                Save Protocol
+                {isAdding ? 'Add Protocol' : 'Save Protocol'}
               </button>
             </div>
           </div>

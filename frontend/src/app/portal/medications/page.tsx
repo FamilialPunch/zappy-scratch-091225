@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import { useToast } from '@/hooks/useToast';
 
 type UserRole = 'provider' | 'admin' | 'provider-admin' | 'super-admin';
 
@@ -47,6 +48,8 @@ export default function MedicationsPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedMedications, setSelectedMedications] = useState<Set<string>>(new Set());
   const [stockFilter, setStockFilter] = useState('');
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const { success, error: errorToast, info } = useToast();
   
   const [medications, setMedications] = useState<Medication[]>([
     {
@@ -222,13 +225,13 @@ export default function MedicationsPage() {
   ]);
 
   // Filter counts
-  const filterCounts = {
+  const filterCounts = useMemo(() => ({
     all: medications.length,
     acne: medications.filter(m => m.category === 'acne').length,
     hairLoss: medications.filter(m => m.category === 'hairLoss').length,
     ed: medications.filter(m => m.category === 'ed').length,
     weightLoss: medications.filter(m => m.category === 'weightLoss').length
-  };
+  }), [medications]);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -290,6 +293,289 @@ export default function MedicationsPage() {
       setSelectedMedications(new Set());
     } else {
       setSelectedMedications(new Set(filteredMedications.map(m => m.id)));
+    }
+  };
+
+  // CSV helpers
+  const toCsvValue = (v: any) => {
+    if (v === null || v === undefined) return '';
+    let s = String(v);
+    if (s.includes('"')) s = s.replace(/"/g, '""');
+    if (/[",\n]/.test(s)) s = `"${s}"`;
+    return s;
+  };
+
+  const handleExportAll = useCallback(() => {
+    try {
+      if (filteredMedications.length === 0) {
+        info('No medications to export');
+        return;
+      }
+      // Deduplicate by SKU, prefer the last occurrence (typically most recently imported)
+      const uniqueBySkuMap = new Map<string, Medication>();
+      filteredMedications.forEach(m => uniqueBySkuMap.set(m.sku, m));
+      const uniqueMeds = Array.from(uniqueBySkuMap.values());
+
+      // Include plans count, JSON plan details, and pricing range
+      const headers = ['ID','SKU','Name','Generic Name','Category','Dosages','Plans','Plans_JSON','Pricing','Cost','Stock','Status'];
+      const rows = uniqueMeds.map(m => {
+        const prices = (m.plans && m.plans.length > 0) ? m.plans.map(p => p.price) : [m.basePrice || 0];
+        const minPrice = Math.min(...prices);
+        const maxPrice = Math.max(...prices);
+        const pricing = minPrice === maxPrice ? `$${minPrice}` : `$${minPrice}-$${maxPrice}`;
+        const plansJson = JSON.stringify(
+          m.plans.map(p => ({
+            id: p.id,
+            name: p.name,
+            price: p.price,
+            frequency: p.frequency,
+            discount: p.discount,
+            description: p.description
+          }))
+        );
+        return [
+          m.id,
+          m.sku,
+          m.name,
+          m.genericName,
+          m.category,
+          m.dosages.join(' | '),
+          m.plans?.length ?? 0,
+          plansJson,
+          pricing,
+          m.cost,
+          m.stock,
+          m.status
+        ].map(toCsvValue).join(',');
+      });
+      const csv = [headers.join(','), ...rows].join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `medications_export_${new Date().toISOString().split('T')[0]}.csv`;
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      success(`Exported ${uniqueMeds.length} medications to CSV.`);
+    } catch (e) {
+      console.error('Export medications failed', e);
+      errorToast('Export failed');
+    }
+  }, [filteredMedications, info, success, errorToast]);
+
+  const handleExportSelected = useCallback(() => {
+    const selected = medications.filter(m => selectedMedications.has(m.id));
+    if (selected.length === 0) {
+      info('No medications selected for export');
+      return;
+    }
+    try {
+      // Deduplicate by SKU among selected
+      const uniqueBySkuMap = new Map<string, Medication>();
+      selected.forEach(m => uniqueBySkuMap.set(m.sku, m));
+      const uniqueSelected = Array.from(uniqueBySkuMap.values());
+
+      const headers = ['ID','SKU','Name','Generic Name','Category','Dosages','Plans','Plans_JSON','Pricing','Cost','Stock','Status'];
+      const rows = uniqueSelected.map(m => {
+        const prices = (m.plans && m.plans.length > 0) ? m.plans.map(p => p.price) : [m.basePrice || 0];
+        const minPrice = Math.min(...prices);
+        const maxPrice = Math.max(...prices);
+        const pricing = minPrice === maxPrice ? `$${minPrice}` : `$${minPrice}-$${maxPrice}`;
+        const plansJson = JSON.stringify(
+          m.plans.map(p => ({
+            id: p.id,
+            name: p.name,
+            price: p.price,
+            frequency: p.frequency,
+            discount: p.discount,
+            description: p.description
+          }))
+        );
+        return [
+          m.id,
+          m.sku,
+          m.name,
+          m.genericName,
+          m.category,
+          m.dosages.join(' | '),
+          m.plans?.length ?? 0,
+          plansJson,
+          pricing,
+          m.cost,
+          m.stock,
+          m.status
+        ].map(toCsvValue).join(',');
+      });
+      const csv = [headers.join(','), ...rows].join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `selected_medications_export_${new Date().toISOString().split('T')[0]}.csv`;
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      setSelectedMedications(new Set());
+      success(`Exported ${uniqueSelected.length} selected medications to CSV.`);
+    } catch (e) {
+      console.error('Export selected medications failed', e);
+      errorToast('Export failed');
+    }
+  }, [medications, selectedMedications, info, success, errorToast]);
+
+  const handleImportClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleImportCsv = async (file: File) => {
+    try {
+      const text = await file.text();
+      const lines = text.split(/\r?\n/).filter(Boolean);
+      if (lines.length < 2) {
+        info('No data found in CSV');
+        return;
+      }
+      const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+      const get = (row: Record<string,string>, key: string) => row[key] ?? row[key.replace(/\s+/g, '')] ?? '';
+      const hasPlanDetailHeaders = headers.some(h => /^(plan\s*\d+\s*(name|price|frequency|discount))$/.test(h)) || headers.includes('plans_json');
+
+      const parsePlansFromRow = (row: Record<string,string>): Plan[] | undefined => {
+        // Priority 1: JSON in plans_json column
+        const plansJson = row['plans_json'] || row['plansjson'];
+        if (plansJson) {
+          try {
+            const parsed = JSON.parse(plansJson);
+            if (Array.isArray(parsed) && parsed.length) {
+              return parsed.map((p, idx) => ({
+                id: p.id || `p-json-${idx}`,
+                name: p.name || `Plan ${idx+1}`,
+                price: Number(p.price) || 0,
+                frequency: p.frequency || 'once',
+                discount: Number(p.discount) || 0,
+                description: p.description || ''
+              }));
+            }
+          } catch {}
+        }
+        // Priority 2: Column sets like plan1 name, plan1 price, ... up to 5
+        const plans: Plan[] = [];
+        for (let i = 1; i <= 5; i++) {
+          const n = get(row, `plan ${i} name`) || get(row, `plan${i} name`) || get(row, `plan_${i}_name`);
+          const priceStr = get(row, `plan ${i} price`) || get(row, `plan${i} price`) || get(row, `plan_${i}_price`);
+          const freq = get(row, `plan ${i} frequency`) || get(row, `plan${i} frequency`) || get(row, `plan_${i}_frequency`) || 'once';
+          const discStr = get(row, `plan ${i} discount`) || get(row, `plan${i} discount`) || get(row, `plan_${i}_discount`) || '0';
+          if (!n && !priceStr) continue;
+          plans.push({
+            id: `p-${i}`,
+            name: n || `Plan ${i}`,
+            price: Number(priceStr) || 0,
+            frequency: freq || 'once',
+            discount: Number(discStr) || 0,
+            description: ''
+          });
+        }
+        return plans.length ? plans : undefined;
+      };
+      const parseLine = (line: string) => {
+        // Basic CSV parser handling commas inside quotes
+        const result: string[] = [];
+        let cur = '';
+        let inQuotes = false;
+        for (let i = 0; i < line.length; i++) {
+          const ch = line[i];
+          if (ch === '"') {
+            if (inQuotes && line[i+1] === '"') { cur += '"'; i++; }
+            else inQuotes = !inQuotes;
+          } else if (ch === ',' && !inQuotes) {
+            result.push(cur);
+            cur = '';
+          } else {
+            cur += ch;
+          }
+        }
+        result.push(cur);
+        return result;
+      };
+      const imported: Partial<Medication & { preservePlans?: boolean }>[] = [];
+      for (let i = 1; i < lines.length; i++) {
+        const values = parseLine(lines[i]);
+        const row: Record<string, string> = {};
+        headers.forEach((h, idx) => row[h] = values[idx]?.trim() ?? '');
+        const name = get(row, 'name');
+        if (!name) continue;
+        const dosagesRaw = get(row, 'dosages');
+        const parsedPlans = hasPlanDetailHeaders ? parsePlansFromRow(row) : undefined;
+        // If no explicit base price, try to derive it from a Pricing column like "$10-$20" or "$59"
+        const pricingStr = (get(row, 'pricing') || '').replace(/\$/g, '').replace(/\s/g, '');
+        let derivedBasePrice: number | undefined = undefined;
+        if (pricingStr) {
+          const parts = pricingStr.split('-').map(p => p.replace(/[^0-9.]/g, ''));
+          const nums = parts.map(p => Number(p)).filter(n => !isNaN(n));
+          if (nums.length > 0) derivedBasePrice = Math.min(...nums);
+        }
+        const medPartial: Partial<Medication & { preservePlans?: boolean }> = {
+          id: crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${i}`,
+          sku: get(row, 'sku') || `SKU-${Math.random().toString(36).slice(2,8).toUpperCase()}`,
+          name,
+          genericName: get(row, 'generic name') || get(row, 'genericname') || name,
+          // If category is unrecognized, we'll preserve existing during merge or default to 'acne'
+          category: (['acne','hairloss','ed','weightloss'].includes((get(row, 'category') || '').toLowerCase())
+            ? (get(row, 'category') as Medication['category'])
+            : undefined) as Medication['category'] | undefined,
+          dosages: dosagesRaw ? dosagesRaw.split(/\||;|\//).map(s => s.trim()).filter(Boolean) : undefined,
+          basePrice: get(row, 'base price') || get(row, 'baseprice') ? (Number(get(row, 'base price') || get(row, 'baseprice')) || 0) : derivedBasePrice,
+          cost: get(row, 'cost') ? (Number(get(row, 'cost')) || 0) : undefined,
+          stock: get(row, 'stock') ? (Number(get(row, 'stock')) || 0) : undefined,
+          status: get(row, 'status') ? (((get(row, 'status') || 'active') === 'inactive' ? 'inactive' : 'active') as Medication['status']) : undefined,
+          plans: parsedPlans,
+          // If no detailed plan columns, mark to preserve existing plans
+          preservePlans: !hasPlanDetailHeaders
+        };
+        imported.push(medPartial);
+      }
+      if (imported.length === 0) {
+        info('No valid medications found in CSV');
+        return;
+      }
+      // Instead of merging by SKU, prepend imported medications as new entries above existing data
+      const newMeds: Medication[] = imported.map((imp, idx) => {
+        const plans = (imp.plans as Plan[] | undefined) && (imp.plans as Plan[]).length
+          ? (imp.plans as Plan[])
+          : [
+              {
+                id: `p-new-${Date.now()}-${idx}`,
+                name: 'One-time Purchase',
+                price: (imp.basePrice as number) || 0,
+                frequency: 'once',
+                discount: 0,
+                description: 'Single purchase'
+              }
+            ];
+        return {
+          id: (imp.id as string) || (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${idx}`),
+          sku: (imp.sku as string) || `SKU-${Math.random().toString(36).slice(2,8).toUpperCase()}`,
+          name: imp.name as string,
+          genericName: (imp.genericName as string) || (imp.name as string),
+          category: (imp.category as Medication['category']) || 'acne',
+          dosages: (imp.dosages as string[]) || ['Standard'],
+          basePrice: (imp.basePrice as number) || 0,
+          cost: (imp.cost as number) || 0,
+          stock: (imp.stock as number) || 0,
+          status: (imp.status as Medication['status']) || 'active',
+          plans,
+          shippingOptions: [ { frequency: '30 days', default: true } ]
+        };
+      });
+      setMedications(prev => [...newMeds, ...prev]);
+      success(`Imported ${newMeds.length} medications (added as new entries)`);
+    } catch (e) {
+      console.error('Import CSV failed', e);
+      errorToast('Import failed');
     }
   };
 
@@ -412,14 +698,14 @@ export default function MedicationsPage() {
         <div className="flex-1"></div>
 
         {/* Action Buttons */}
-        <button className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 font-medium text-gray-700">
+        <button onClick={handleImportClick} className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 font-medium text-gray-700">
           <svg className="w-4 h-4 inline mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
           </svg>
           Import CSV
         </button>
         
-        <button className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 font-medium text-gray-700">
+        <button onClick={handleExportAll} className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 font-medium text-gray-700">
           <svg className="w-4 h-4 inline mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
           </svg>
@@ -432,6 +718,20 @@ export default function MedicationsPage() {
         >
           Add Medication
         </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".csv,text/csv"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) {
+              handleImportCsv(file);
+              // reset input so same file can be re-imported
+              e.currentTarget.value = '';
+            }
+          }}
+        />
       </div>
 
       {/* Bulk Actions Bar (show when items selected) */}
@@ -442,7 +742,7 @@ export default function MedicationsPage() {
           </span>
           <button className="text-sm text-gray-600 hover:text-gray-900">Update Stock</button>
           <button className="text-sm text-gray-600 hover:text-gray-900">Change Category</button>
-          <button className="text-sm text-gray-600 hover:text-gray-900">Export</button>
+          <button onClick={handleExportSelected} className="text-sm text-gray-600 hover:text-gray-900">Export</button>
           <button className="text-sm text-red-600 hover:text-red-700">Deactivate</button>
           <div className="flex-1"></div>
           <button 
@@ -684,6 +984,117 @@ export default function MedicationsPage() {
           </div>
         </div>
       )}
+
+      {/* Add Medication Modal */}
+      {showAddModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <h3 className="text-lg font-semibold mb-4">Add Medication</h3>
+            <AddMedicationForm
+              onCancel={() => setShowAddModal(false)}
+              onSave={(med) => {
+                setMedications(prev => [med, ...prev]);
+                setShowAddModal(false);
+                success('Medication added');
+              }}
+            />
+          </div>
+        </div>
+      )}
     </div>
+  );
+}
+
+// Inline form component to keep file self-contained
+function AddMedicationForm({ onCancel, onSave }: { onCancel: () => void; onSave: (m: Medication) => void }) {
+  const [name, setName] = useState('');
+  const [genericName, setGenericName] = useState('');
+  const [sku, setSku] = useState('');
+  const [category, setCategory] = useState<Medication['category']>('acne');
+  const [dosages, setDosages] = useState('');
+  const [basePrice, setBasePrice] = useState<number>(0);
+  const [cost, setCost] = useState<number>(0);
+  const [stock, setStock] = useState<number>(0);
+  const [status, setStatus] = useState<Medication['status']>('active');
+  const { error: errorToast } = useToast();
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim()) {
+      errorToast('Name is required');
+      return;
+    }
+    const med: Medication = {
+      id: crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}`,
+      sku: sku || `SKU-${Math.random().toString(36).slice(2,8).toUpperCase()}`,
+      name: name.trim(),
+      genericName: (genericName || name).trim(),
+      category,
+      dosages: dosages ? dosages.split(',').map(s => s.trim()).filter(Boolean) : ['Standard'],
+      basePrice: Number(basePrice) || 0,
+      cost: Number(cost) || 0,
+      stock: Number(stock) || 0,
+      status,
+      plans: [
+        { id: 'p-new-1', name: 'One-time Purchase', price: Number(basePrice) || 0, frequency: 'once', discount: 0, description: 'Single purchase' }
+      ],
+      shippingOptions: [ { frequency: '30 days', default: true } ]
+    };
+    onSave(med);
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm text-gray-700 mb-1">Name</label>
+          <input value={name} onChange={(e) => setName(e.target.value)} className="w-full border rounded px-3 py-2" />
+        </div>
+        <div>
+          <label className="block text-sm text-gray-700 mb-1">Generic Name</label>
+          <input value={genericName} onChange={(e) => setGenericName(e.target.value)} className="w-full border rounded px-3 py-2" />
+        </div>
+        <div>
+          <label className="block text-sm text-gray-700 mb-1">SKU</label>
+          <input value={sku} onChange={(e) => setSku(e.target.value)} className="w-full border rounded px-3 py-2" />
+        </div>
+        <div>
+          <label className="block text-sm text-gray-700 mb-1">Category</label>
+          <select value={category} onChange={(e) => setCategory(e.target.value as Medication['category'])} className="w-full border rounded px-3 py-2">
+            <option value="acne">Acne</option>
+            <option value="hairLoss">Hair Loss</option>
+            <option value="ed">ED</option>
+            <option value="weightLoss">Weight Loss</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm text-gray-700 mb-1">Dosages (comma separated)</label>
+          <input value={dosages} onChange={(e) => setDosages(e.target.value)} className="w-full border rounded px-3 py-2" placeholder="e.g. 0.025%, 0.05%" />
+        </div>
+        <div>
+          <label className="block text-sm text-gray-700 mb-1">Base Price</label>
+          <input type="number" step="0.01" value={basePrice} onChange={(e) => setBasePrice(parseFloat(e.target.value))} className="w-full border rounded px-3 py-2" />
+        </div>
+        <div>
+          <label className="block text-sm text-gray-700 mb-1">Cost</label>
+          <input type="number" step="0.01" value={cost} onChange={(e) => setCost(parseFloat(e.target.value))} className="w-full border rounded px-3 py-2" />
+        </div>
+        <div>
+          <label className="block text-sm text-gray-700 mb-1">Stock</label>
+          <input type="number" value={stock} onChange={(e) => setStock(parseInt(e.target.value || '0', 10))} className="w-full border rounded px-3 py-2" />
+        </div>
+        <div>
+          <label className="block text-sm text-gray-700 mb-1">Status</label>
+          <select value={status} onChange={(e) => setStatus(e.target.value as Medication['status'])} className="w-full border rounded px-3 py-2">
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+          </select>
+        </div>
+      </div>
+      <div className="flex justify-end gap-2 pt-2">
+        <button type="button" onClick={onCancel} className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50">Cancel</button>
+        <button type="submit" className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800">Save</button>
+      </div>
+    </form>
   );
 }
