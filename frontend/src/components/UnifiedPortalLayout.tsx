@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 
@@ -23,6 +23,12 @@ export default function UnifiedPortalLayout({ children }: { children: React.Reac
   const [userName, setUserName] = useState('');
   const [userTitle, setUserTitle] = useState('');
   const [messagesBadge, setMessagesBadge] = useState<number>(0);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [notifications, setNotifications] = useState<
+    { id: string; title: string; description?: string; time?: string; href?: string; read?: boolean }[]
+  >([]);
+  const notifRef = useRef<HTMLDivElement | null>(null);
+  const [hideSyntheticMessagesItem, setHideSyntheticMessagesItem] = useState(false);
 
   useEffect(() => {
     // Get user role from localStorage or auth context
@@ -50,13 +56,20 @@ export default function UnifiedPortalLayout({ children }: { children: React.Reac
     const handleCustom = (e: Event) => {
       try {
         const detail = (e as CustomEvent).detail as number;
-        if (typeof detail === 'number') setMessagesBadge(detail);
+        if (typeof detail === 'number') {
+          setMessagesBadge(detail);
+          // New activity should re-show synthetic item
+          setHideSyntheticMessagesItem(false);
+        }
       } catch {}
     };
     const handleStorage = (e: StorageEvent) => {
       if (e.key === 'messagesUnreadCount' && e.newValue !== null) {
         const n = parseInt(e.newValue, 10);
-        if (!Number.isNaN(n)) setMessagesBadge(n);
+        if (!Number.isNaN(n)) {
+          setMessagesBadge(n);
+          setHideSyntheticMessagesItem(false);
+        }
       }
     };
     window.addEventListener('messagesUnreadCountChanged', handleCustom as EventListener);
@@ -67,6 +80,41 @@ export default function UnifiedPortalLayout({ children }: { children: React.Reac
       window.removeEventListener('storage', handleStorage);
     };
   }, [pathname]); // Re-run when pathname changes to catch navigation from login
+
+  // Load any stored notifications from localStorage (optional, safe if empty)
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('notifications');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) setNotifications(parsed);
+      }
+    } catch {}
+  }, []);
+
+  // Close notifications when navigating
+  useEffect(() => {
+    if (isNotificationsOpen) setIsNotificationsOpen(false);
+  }, [pathname]);
+
+  // Close on outside click and Escape
+  useEffect(() => {
+    if (!isNotificationsOpen) return;
+    const onDocClick = (e: MouseEvent) => {
+      if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
+        setIsNotificationsOpen(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsNotificationsOpen(false);
+    };
+    document.addEventListener('mousedown', onDocClick);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDocClick);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [isNotificationsOpen]);
 
   // Skip layout for login pages
   if (pathname?.includes('/login')) {
@@ -247,6 +295,44 @@ export default function UnifiedPortalLayout({ children }: { children: React.Reac
     .join('')
     .toUpperCase()
     .slice(0, 2);
+
+  const hasUnreadNotifications = notifications.some(n => !n.read) || messagesBadge > 0;
+
+  // Build an effective list so the bell reflects unread Messages even if no stored notifications exist
+  const effectiveNotifications = (() => {
+    const list = [...notifications];
+    if (messagesBadge > 0 && !hideSyntheticMessagesItem) {
+      // Prepend a synthetic unread-messages item
+      list.unshift({
+        id: 'messages-unread',
+        title: `${messagesBadge} unread message${messagesBadge === 1 ? '' : 's'}`,
+        description: 'Go to Messages to view and reply',
+        href: '/portal/messages',
+        time: 'Just now',
+        read: false,
+      });
+    }
+    return list;
+  })();
+
+  const clearUnreadMessages = (newCount = 0) => {
+    try {
+      localStorage.setItem('messagesUnreadCount', String(newCount));
+    } catch {}
+    setMessagesBadge(newCount);
+    try { window.dispatchEvent(new CustomEvent('messagesUnreadCountChanged', { detail: newCount })); } catch {}
+  };
+
+  const markAllAsRead = () => {
+    // Mark stored notifications as read (affects dropdown items)
+    setNotifications((prev) => {
+      const updated = prev.map(n => ({ ...n, read: true }));
+      try { localStorage.setItem('notifications', JSON.stringify(updated)); } catch {}
+      return updated;
+    });
+    // Hide synthetic messages item for this session until a new unread count arrives
+    setHideSyntheticMessagesItem(true);
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
@@ -509,12 +595,93 @@ export default function UnifiedPortalLayout({ children }: { children: React.Reac
             
             <div className="flex items-center space-x-4">
               {/* Notifications */}
-              <button className="relative p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-                </svg>
-                <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-400 rounded-full"></span>
-              </button>
+              <div className="relative" ref={notifRef}>
+                <button
+                  type="button"
+                  aria-haspopup="menu"
+                  aria-expanded={isNotificationsOpen}
+                  aria-label="Notifications"
+                  onClick={() => setIsNotificationsOpen((o) => !o)}
+                  className="relative p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-300"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                  </svg>
+                  {hasUnreadNotifications && (
+                    <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-400 rounded-full"></span>
+                  )}
+                </button>
+
+                {isNotificationsOpen && (
+                  <div
+                    role="menu"
+                    aria-label="Notifications"
+                    className="absolute right-0 mt-2 w-80 bg-white border border-gray-200 rounded-lg shadow-lg z-50"
+                  >
+                    <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+                      <div className="text-sm font-medium text-gray-900">Notifications</div>
+                      <button
+                        onClick={markAllAsRead}
+                        className="text-xs text-gray-500 hover:text-gray-700"
+                      >
+                        Mark all as read
+                      </button>
+                    </div>
+
+                    <div className="max-h-80 overflow-y-auto">
+                      {effectiveNotifications.length === 0 ? (
+                        <div className="px-4 py-6 text-sm text-gray-500 text-center">You're all caught up.</div>
+                      ) : (
+                        effectiveNotifications.map((n) => {
+                          const indicator = n.read ? 'bg-gray-300' : 'bg-red-400';
+                          return (
+                            <button
+                              key={n.id}
+                              onClick={() => {
+                                if (n.id === 'messages-unread') {
+                                  // Only hide from dropdown; do not clear unread count globally
+                                  setHideSyntheticMessagesItem(true);
+                                }
+                                if (n.href) router.push(n.href);
+                                setIsNotificationsOpen(false);
+                                // Mark individual as read
+                                if (n.id !== 'messages-unread') {
+                                  setNotifications((prev) => {
+                                    const updated = prev.map(x => x.id === n.id ? { ...x, read: true } : x);
+                                    try { localStorage.setItem('notifications', JSON.stringify(updated)); } catch {}
+                                    return updated;
+                                  });
+                                }
+                              }}
+                              className={`w-full text-left px-4 py-3 hover:bg-gray-50 flex items-start space-x-3 ${n.read ? 'opacity-80' : ''}`}
+                            >
+                              <span className={`mt-1 w-2 h-2 rounded-full ${indicator}`}></span>
+                              <div className="flex-1">
+                                <div className="text-sm text-gray-900">{n.title}</div>
+                                {n.description && (
+                                  <div className="text-xs text-gray-500 mt-0.5">{n.description}</div>
+                                )}
+                                {n.time && (
+                                  <div className="text-[11px] text-gray-400 mt-0.5">{n.time}</div>
+                                )}
+                              </div>
+                            </button>
+                          );
+                        })
+                      )}
+                    </div>
+
+                    <div className="px-4 py-2 border-t border-gray-100">
+                      <button
+                        onClick={() => { router.push('/portal/messages'); setIsNotificationsOpen(false); }}
+                        className="w-full text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-md py-2"
+                      >
+                        View inbox
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
               
               {/* Help */}
               <button className="p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100">
