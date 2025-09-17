@@ -184,30 +184,155 @@ router.post('/',
 // Get consultation by ID
 router.get('/:id',
   [
-    param('id').isUUID().withMessage('Invalid consultation ID')
+    param('id').custom((value) => {
+      // Allow numeric IDs for mock data or UUIDs for real data
+      return /^\d+$/.test(value) || /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+    }).withMessage('Invalid consultation ID')
   ],
   handleValidationErrors,
   asyncHandler(async (req, res) => {
-    const db = getDatabase();
-    const [consultation] = await db
-      .select()
-      .from(consultations)
-      .where(eq(consultations.id, req.params.id))
-      .limit(1);
+    const { id } = req.params;
+    
+    // Handle mock consultations for demo
+    if (/^\d+$/.test(id)) {
+      const mockConsultations = {
+        '1': {
+          id: '1',
+          consultation_type: 'general_medicine',
+          chief_complaint: 'Persistent headache for the past week',
+          status: 'in-progress',
+          urgency: 'regular',
+          created_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+          updated_at: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
+          provider_name: 'Dr. Sarah Johnson',
+          provider_response: 'I\'ve reviewed your symptoms. Let\'s discuss your headache patterns and potential triggers.',
+          patient_id: req.user?.id || 'demo-patient'
+        },
+        '2': {
+          id: '2',
+          consultation_type: 'dermatology',
+          chief_complaint: 'Acne treatment follow-up',
+          status: 'completed',
+          urgency: 'regular',
+          created_at: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+          updated_at: new Date(Date.now() - 28 * 24 * 60 * 60 * 1000).toISOString(),
+          provider_name: 'Dr. Michael Chen',
+          diagnosis: 'Mild to moderate acne vulgaris',
+          treatment_plan: 'Continue with Tretinoin 0.05% nightly. Add Doxycycline 100mg twice daily for 8 weeks.',
+          patient_id: req.user?.id || 'demo-patient',
+          category: 'acne',
+          medication_name: 'Tretinoin + Doxycycline',
+          dosage: '0.05% cream + 100mg',
+          frequency: 'Nightly + Twice daily',
+          duration: '12 weeks',
+          refills_remaining: 2
+        },
+        '3': {
+          id: '3',
+          consultation_type: 'weight_loss',
+          chief_complaint: 'Weight management consultation',
+          status: 'completed',
+          urgency: 'regular',
+          created_at: new Date(Date.now() - 45 * 24 * 60 * 60 * 1000).toISOString(),
+          updated_at: new Date(Date.now() - 43 * 24 * 60 * 60 * 1000).toISOString(),
+          provider_name: 'Dr. Emily Rodriguez',
+          diagnosis: 'BMI indicates overweight category',
+          treatment_plan: 'Prescribed Semaglutide 0.5mg weekly. Lifestyle modifications discussed.',
+          patient_id: req.user?.id || 'demo-patient',
+          category: 'weightLoss',
+          medication_name: 'Semaglutide',
+          dosage: '0.5mg',
+          frequency: 'Once weekly',
+          duration: 'Ongoing',
+          refills_remaining: 5
+        },
+        '4': {
+          id: '4',
+          consultation_type: 'mental_health',
+          chief_complaint: 'Anxiety and stress management',
+          status: 'pending',
+          urgency: 'urgent',
+          created_at: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(),
+          updated_at: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(),
+          patient_id: req.user?.id || 'demo-patient'
+        },
+        '123': {
+          id: '123',
+          consultation_type: 'dermatology',
+          chief_complaint: 'Acne treatment consultation',
+          status: 'completed',
+          urgency: 'regular',
+          created_at: new Date(Date.now() - 45 * 24 * 60 * 60 * 1000).toISOString(),
+          updated_at: new Date(Date.now() - 43 * 24 * 60 * 60 * 1000).toISOString(),
+          provider_name: 'Dr. Michael Chen',
+          provider_response: 'I\'ve reviewed your case and prescribed a combination therapy for your acne.',
+          diagnosis: 'Moderate acne vulgaris',
+          treatment_plan: 'Prescribed Tretinoin 0.05% cream for nightly application and Doxycycline 100mg twice daily for 12 weeks.',
+          patient_id: req.user?.id || 'demo-patient',
+          category: 'acne',
+          medication_name: 'Tretinoin + Doxycycline',
+          dosage: '0.05% cream + 100mg',
+          frequency: 'Nightly + Twice daily',
+          duration: '12 weeks',
+          refills_remaining: 2
+        },
+        '124': {
+          id: '124',
+          consultation_type: 'weight_loss',
+          chief_complaint: 'Weight management consultation',
+          status: 'completed',
+          urgency: 'regular',
+          created_at: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+          updated_at: new Date(Date.now() - 28 * 24 * 60 * 60 * 1000).toISOString(),
+          provider_name: 'Dr. Emily Rodriguez',
+          provider_response: 'Based on your health profile, I\'m prescribing Semaglutide to help with weight management.',
+          diagnosis: 'BMI indicates overweight category',
+          treatment_plan: 'Prescribed Semaglutide 0.5mg weekly with lifestyle modifications including diet and exercise plan.',
+          patient_id: req.user?.id || 'demo-patient',
+          category: 'weightLoss',
+          medication_name: 'Semaglutide',
+          dosage: '0.5mg',
+          frequency: 'Once weekly',
+          duration: 'Ongoing',
+          refills_remaining: 5
+        }
+      };
+      
+      const mockConsultation = mockConsultations[id];
+      if (mockConsultation) {
+        return res.json({
+          success: true,
+          data: mockConsultation
+        });
+      }
+    }
+    
+    // Real database query for UUID consultations
+    try {
+      const db = getDatabase();
+      const [consultation] = await db
+        .select()
+        .from(consultations)
+        .where(eq(consultations.id, req.params.id))
+        .limit(1);
 
-    if (!consultation) {
+      if (!consultation) {
+        return res.status(404).json({ error: 'Consultation not found' });
+      }
+
+      // Parse attachments if they exist
+      if (consultation.attachments) {
+        consultation.attachments = JSON.parse(consultation.attachments);
+      }
+
+      res.json({
+        success: true,
+        data: consultation
+      });
+    } catch (error) {
+      console.error('Error fetching consultation:', error);
       return res.status(404).json({ error: 'Consultation not found' });
     }
-
-    // Parse attachments if they exist
-    if (consultation.attachments) {
-      consultation.attachments = JSON.parse(consultation.attachments);
-    }
-
-    res.json({
-      success: true,
-      data: consultation
-    });
   })
 );
 

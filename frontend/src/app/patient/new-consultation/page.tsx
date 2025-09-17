@@ -468,7 +468,7 @@ export default function NewConsultation() {
             <Link href="/" className="text-2xl font-bold text-purple-600">
               TeleHealth
             </Link>
-            <Link href="/portal/consultations" className="text-gray-600 hover:text-gray-900">
+            <Link href="/patient/consultations" className="text-gray-600 hover:text-gray-900">
               Back to Consultations
             </Link>
           </div>

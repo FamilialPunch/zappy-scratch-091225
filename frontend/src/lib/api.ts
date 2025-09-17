@@ -110,6 +110,13 @@ class ApiClient {
     }),
   };
 
+  // Prescriptions endpoints
+  prescriptions = {
+    getById: (id: string) => this.client.get(`/api/prescriptions/${id}`),
+    requestRefill: (id: string, data?: any) => this.client.post(`/api/prescriptions/${id}/refill`, data),
+    getRefillHistory: (id: string) => this.client.get(`/api/prescriptions/${id}/refills`),
+  };
+
   // Admin endpoints
   admin = {
     getDashboard: () => this.client.get('/api/admin/dashboard'),

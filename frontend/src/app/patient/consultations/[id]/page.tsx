@@ -181,8 +181,8 @@ export default function PatientConsultationDetailsPage() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <button onClick={() => router.push('/patient/dashboard')} className="text-slate-600 hover:text-slate-900">
-          ← Back
+        <button onClick={() => router.push('/patient/consultations')} className="text-slate-600 hover:text-slate-900">
+          ← Back to Consultations
         </button>
         {program.status && (
           <span className="px-3 py-1 text-xs rounded-full bg-emerald-100 text-emerald-700 capitalize">

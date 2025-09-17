@@ -57,7 +57,7 @@ const createStore = () => {
 // General API rate limiter
 export const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // Limit each IP to 100 requests per windowMs
+  max: process.env.NODE_ENV === 'development' ? 1000 : 100, // More lenient in development
   message: {
     error: 'Too many requests from this IP',
     message: 'Please try again later'
@@ -67,6 +67,14 @@ export const generalLimiter = rateLimit({
   keyGenerator: (req) => {
     // Use user ID if authenticated, otherwise IP
     return req.user?.id || req.ip;
+  },
+  skip: (req) => {
+    // Skip rate limiting in development for certain paths
+    if (process.env.NODE_ENV === 'development') {
+      const exemptPaths = ['/api/patients/me/consultations', '/api/patients/me', '/api/patients/me/programs'];
+      return exemptPaths.some(path => req.path.includes(path));
+    }
+    return false;
   }
 });
 

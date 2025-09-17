@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 interface OrderItem {
   name: string;
@@ -8,6 +9,7 @@ interface OrderItem {
   warnings: string;
   quantity: string;
   refills: string;
+  prescriptionId?: string;
 }
 
 interface Order {
@@ -21,6 +23,14 @@ interface Order {
 
 export default function OrdersPage() {
   const [expandedOrder, setExpandedOrder] = useState<string | null>(null);
+  const router = useRouter();
+
+  const handleTrackingClick = (trackingNumber: string) => {
+    // For demo purposes, we'll open a mock tracking page
+    // In production, this would open the actual carrier's tracking page
+    const trackingUrl = `https://tools.usps.com/go/TrackConfirmAction?qtc_tLabels1=${trackingNumber}`;
+    window.open(trackingUrl, '_blank', 'noopener,noreferrer');
+  };
   
   const orders: Order[] = [
     {
@@ -33,14 +43,16 @@ export default function OrdersPage() {
           instructions: 'Apply at bedtime to clean skin',
           warnings: 'Use sunscreen daily',
           quantity: '1 tube (30g)',
-          refills: '2 refills left'
+          refills: '2 refills left',
+          prescriptionId: 'mock-1'
         },
         {
           name: 'Doxycycline 100mg',
           instructions: 'Take twice daily with food',
           warnings: 'Avoid sun exposure',
           quantity: '60 capsules',
-          refills: '1 refill left'
+          refills: '1 refill left',
+          prescriptionId: 'mock-2'
         }
       ],
       total: '$147.00',
@@ -56,13 +68,23 @@ export default function OrdersPage() {
           instructions: 'Take 1 tablet daily',
           warnings: 'Keep away from pregnant women',
           quantity: '30 tablets',
-          refills: '5 refills left'
+          refills: '5 refills left',
+          prescriptionId: 'mock-3'
         }
       ],
       total: '$29.00',
       tracking: '9400111899562123456788'
     }
   ];
+
+  const handleRefillRequest = (prescriptionId: string | undefined, medicationName: string) => {
+    if (!prescriptionId) {
+      return;
+    }
+
+    // Navigate to refill-checkin page with prescription ID as query parameter
+    router.push(`/patient/refill-checkin?prescription=${prescriptionId}`);
+  };
 
   const activeShipment = {
     status: 'in-transit',
@@ -98,7 +120,10 @@ export default function OrdersPage() {
             />
           </div>
           
-          <button className="text-sm text-white/90 underline">
+          <button 
+            onClick={() => handleTrackingClick(activeShipment.tracking)}
+            className="text-sm text-white/90 underline hover:text-white transition-colors"
+          >
             Track: {activeShipment.tracking}
           </button>
         </div>
@@ -122,7 +147,10 @@ export default function OrdersPage() {
               
               <div className="flex items-center justify-between pt-3 border-t border-slate-100">
                 <span className="text-xs text-slate-500">{med.refills}</span>
-                <button className="text-xs font-medium text-medical-600 hover:text-medical-700">
+                <button 
+                  onClick={() => handleRefillRequest(med.prescriptionId, med.name)}
+                  className="text-xs font-medium text-medical-600 hover:text-medical-700"
+                >
                   Request Refill →
                 </button>
               </div>
@@ -202,7 +230,15 @@ export default function OrdersPage() {
                     ))}
                     <div className="pt-2 border-t border-slate-200">
                       <p className="text-xs text-slate-600">
-                        Tracking: <span className="font-mono">{order.tracking}</span>
+                        Tracking: <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleTrackingClick(order.tracking);
+                          }}
+                          className="font-mono text-medical-600 hover:text-medical-700 underline"
+                        >
+                          {order.tracking}
+                        </button>
                       </p>
                     </div>
                   </div>

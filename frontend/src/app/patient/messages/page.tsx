@@ -1,359 +1,234 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import Link from 'next/link';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 
-interface Message {
+interface MessageThread {
   id: string;
-  senderId: string;
-  senderName: string;
-  senderType: 'patient' | 'provider';
-  content: string;
+  participants: {
+    from: string;
+    to: string;
+  };
+  subject: string;
+  lastMessage: string;
   timestamp: string;
-  isRead: boolean;
-  attachments?: string[];
+  date: string;
+  isUrgent?: boolean;
+  isUnread?: boolean;
+  hasAttachment?: boolean;
 }
 
-interface Conversation {
-  id: string;
-  patientName: string;
-  providerName: string;
-  lastMessage: string;
-  lastMessageTime: string;
-  unreadCount: number;
-  consultationType: string;
-}
+type FilterTab = 'all' | 'unread' | 'fromPatients' | 'fromProviders';
 
 export default function PatientMessages() {
   const router = useRouter();
-  const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [newMessage, setNewMessage] = useState('');
-  const [isTyping, setIsTyping] = useState(false);
-  const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
-  const [showConversations, setShowConversations] = useState(true); // Mobile toggle
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [activeTab, setActiveTab] = useState<FilterTab>('all');
 
-  // Mock conversations
-  const [conversations] = useState<Conversation[]>([
+  // Mock data based on the image
+  const messageThreads: MessageThread[] = [
     {
       id: '1',
-      patientName: 'John Doe',
-      providerName: 'Dr. Sarah Smith',
-      lastMessage: 'Your test results look good',
-      lastMessageTime: '2 hours ago',
-      unreadCount: 2,
-      consultationType: 'General Medicine'
+      participants: {
+        from: 'Sarah Johnson',
+        to: 'Dr. Smith'
+      },
+      subject: 'Question about prescription',
+      lastMessage: 'Hi Dr. Smith, I have a question about my new prescription...',
+      timestamp: '02:30 PM',
+      date: '1/15/2024',
+      isUnread: true,
+      isUrgent: false
     },
     {
       id: '2',
-      patientName: 'John Doe',
-      providerName: 'Dr. Michael Johnson',
-      lastMessage: 'Please schedule a follow-up',
-      lastMessageTime: '1 day ago',
-      unreadCount: 0,
-      consultationType: 'Dermatology'
+      participants: {
+        from: 'Dr. Jones',
+        to: 'Dr. Smith'
+      },
+      subject: 'Patient referral',
+      lastMessage: 'I have a patient who needs specialized care...',
+      timestamp: '12:00 PM',
+      date: '1/15/2024',
+      isUnread: true,
+      hasAttachment: true
+    },
+    {
+      id: '3',
+      participants: {
+        from: 'System',
+        to: 'Dr. Smith'
+      },
+      subject: 'New lab results available',
+      lastMessage: 'Lab results for patient Michael Chen are now available...',
+      timestamp: '10:00 AM',
+      date: '1/15/2024',
+      isUrgent: true
     }
-  ]);
+  ];
 
-  useEffect(() => {
-    // Auto-scroll to bottom when new messages arrive
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
-
-  useEffect(() => {
-    // Load messages when conversation is selected
-    if (selectedConversation) {
-      const mockMessages: Message[] = [
-        {
-          id: '1',
-          senderId: '2',
-          senderName: selectedConversation.providerName,
-          senderType: 'provider',
-          content: 'Hello! I\'ve reviewed your consultation request.',
-          timestamp: '10:00 AM',
-          isRead: true
-        },
-        {
-          id: '2',
-          senderId: '1',
-          senderName: 'You',
-          senderType: 'patient',
-          content: 'Thank you for getting back to me, Doctor.',
-          timestamp: '10:05 AM',
-          isRead: true
-        },
-        {
-          id: '3',
-          senderId: '2',
-          senderName: selectedConversation.providerName,
-          senderType: 'provider',
-          content: 'Based on your symptoms, I recommend the following treatment plan.',
-          timestamp: '10:10 AM',
-          isRead: true
-        }
-      ];
-      setMessages(mockMessages);
-      // Hide conversations list on mobile when selecting
-      if (window.innerWidth < 768) {
-        setShowConversations(false);
-      }
+  const filteredThreads = messageThreads.filter(thread => {
+    switch (activeTab) {
+      case 'unread':
+        return thread.isUnread;
+      case 'fromPatients':
+        return thread.participants.from !== 'System' && !thread.participants.from.includes('Dr.');
+      case 'fromProviders':
+        return thread.participants.from.includes('Dr.');
+      default:
+        return true;
     }
-  }, [selectedConversation]);
+  });
 
-  const handleSendMessage = () => {
-    if (newMessage.trim() || attachedFiles.length > 0) {
-      const message: Message = {
-        id: Date.now().toString(),
-        senderId: '1',
-        senderName: 'You',
-        senderType: 'patient',
-        content: newMessage,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        isRead: false,
-        attachments: attachedFiles.map(f => f.name)
-      };
-      
-      setMessages(prev => [...prev, message]);
-      setNewMessage('');
-      setAttachedFiles([]);
-      
-      // Simulate provider typing
-      setTimeout(() => {
-        setIsTyping(true);
-        setTimeout(() => {
-          setIsTyping(false);
-          const reply: Message = {
-            id: (Date.now() + 1).toString(),
-            senderId: '2',
-            senderName: selectedConversation?.providerName || 'Provider',
-            senderType: 'provider',
-            content: 'I\'ve received your message and will respond shortly.',
-            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            isRead: false
-          };
-          setMessages(prev => [...prev, reply]);
-        }, 2000);
-      }, 1000);
-    }
+  const stats = {
+    totalMessages: messageThreads.length,
+    unread: messageThreads.filter(m => m.isUnread).length,
+    urgent: messageThreads.filter(m => m.isUrgent).length,
+    responseRate: 98
   };
 
-  const handleFileAttachment = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      setAttachedFiles(prev => [...prev, ...Array.from(e.target.files!)]);
-    }
+  const handleCompose = () => {
+    // Navigate to compose message page or open modal
+    router.push('/patient/messages/compose');
   };
 
-  const removeAttachment = (index: number) => {
-    setAttachedFiles(prev => prev.filter((_, i) => i !== index));
+  const handleThreadClick = (threadId: string) => {
+    // Navigate to message thread detail
+    router.push(`/patient/messages/${threadId}`);
   };
 
   return (
-    <div className="min-h-screen bg-zinc-50">
-      {/* Mobile-first Header */}
-      <div className="sticky top-0 z-10 bg-white border-b border-slate-200 px-4 py-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            {selectedConversation && (
-              <button
-                onClick={() => setShowConversations(true)}
-                className="lg:hidden text-slate-600"
-              >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                </svg>
-              </button>
-            )}
-            <h1 className="text-lg font-bold text-slate-900">Messages</h1>
-          </div>
-          {conversations.reduce((acc, c) => acc + c.unreadCount, 0) > 0 && (
-            <span className="px-2 py-1 bg-red-100 text-red-700 text-xs font-semibold rounded-full">
-              {conversations.reduce((acc, c) => acc + c.unreadCount, 0)} New
-            </span>
-          )}
-        </div>
-      </div>
-
-      <div className="flex h-[calc(100vh-60px)]">
-        {/* Conversations List - Mobile Responsive */}
-        <div className={`${
-          showConversations ? 'block' : 'hidden'
-        } lg:block w-full lg:w-1/3 xl:w-1/4 bg-white border-r border-slate-200 overflow-y-auto`}>
-          {conversations.map(conversation => (
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Header */}
+        <div className="mb-8">
+          <div className="flex justify-between items-center mb-2">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">Messages</h1>
+              <p className="text-sm text-gray-600 mt-1">Communicate with patients and providers</p>
+            </div>
             <button
-              key={conversation.id}
-              onClick={() => setSelectedConversation(conversation)}
-              className={`w-full text-left p-4 hover:bg-slate-50 border-b border-slate-100 transition-colors ${
-                selectedConversation?.id === conversation.id ? 'bg-medical-50 border-l-4 border-l-medical-500' : ''
-              }`}
+              onClick={handleCompose}
+              className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors text-sm font-medium"
             >
-              <div className="flex items-start justify-between">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between mb-1">
-                    <h3 className="font-semibold text-slate-900 text-sm truncate">
-                      {conversation.providerName}
-                    </h3>
-                    <span className="text-xs text-slate-500 ml-2">
-                      {conversation.lastMessageTime}
-                    </span>
-                  </div>
-                  <p className="text-xs text-medical-600 font-medium mb-1">
-                    {conversation.consultationType}
-                  </p>
-                  <p className="text-sm text-slate-600 truncate">
-                    {conversation.lastMessage}
-                  </p>
-                </div>
-                {conversation.unreadCount > 0 && (
-                  <span className="ml-2 bg-red-500 text-white text-xs rounded-full px-2 py-0.5 flex-shrink-0">
-                    {conversation.unreadCount}
-                  </span>
-                )}
-              </div>
+              Compose Message
             </button>
-          ))}
+          </div>
         </div>
 
-        {/* Message Thread - Mobile Responsive */}
-        <div className={`${
-          !showConversations || window.innerWidth >= 1024 ? 'flex' : 'hidden'
-        } lg:flex flex-1 flex-col bg-white`}>
-          {selectedConversation ? (
-            <>
-              {/* Chat Header */}
-              <div className="p-4 border-b border-slate-200 bg-slate-50">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="font-semibold text-slate-900">
-                      {selectedConversation.providerName}
-                    </h3>
-                    <p className="text-xs text-medical-600">
-                      {selectedConversation.consultationType}
-                    </p>
-                  </div>
-                  <button className="p-2 text-medical-600 hover:bg-white rounded-lg transition-colors">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                    </svg>
-                  </button>
-                </div>
-              </div>
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <div className="bg-white p-4 rounded-lg shadow-sm">
+            <p className="text-sm text-gray-600 mb-1">Total Messages</p>
+            <p className="text-2xl font-bold text-gray-900">{stats.totalMessages}</p>
+          </div>
+          <div className="bg-white p-4 rounded-lg shadow-sm">
+            <p className="text-sm text-gray-600 mb-1">Unread</p>
+            <p className="text-2xl font-bold text-blue-600">{stats.unread}</p>
+          </div>
+          <div className="bg-white p-4 rounded-lg shadow-sm">
+            <p className="text-sm text-gray-600 mb-1">Urgent</p>
+            <p className="text-2xl font-bold text-red-600">{stats.urgent}</p>
+          </div>
+          <div className="bg-white p-4 rounded-lg shadow-sm">
+            <p className="text-sm text-gray-600 mb-1">Response Rate</p>
+            <p className="text-2xl font-bold text-green-600">{stats.responseRate}%</p>
+          </div>
+        </div>
 
-              {/* Messages Area */}
-              <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                {messages.map(message => (
-                  <div
-                    key={message.id}
-                    className={`flex ${message.senderType === 'patient' ? 'justify-end' : 'justify-start'}`}
-                  >
-                    <div className={`max-w-[70%] lg:max-w-md ${
-                      message.senderType === 'patient' 
-                        ? 'bg-medical-600 text-white rounded-2xl rounded-br-sm' 
-                        : 'bg-slate-100 text-slate-900 rounded-2xl rounded-bl-sm'
-                    } px-4 py-2 shadow-sm`}>
-                      <p className="text-sm">{message.content}</p>
-                      {message.attachments && message.attachments.length > 0 && (
-                        <div className="mt-2 space-y-1">
-                          {message.attachments.map((file, index) => (
-                            <div key={index} className={`text-xs ${
-                              message.senderType === 'patient' ? 'text-medical-100' : 'text-slate-500'
-                            }`}>
-                              📎 {file}
-                            </div>
-                          ))}
-                        </div>
+        {/* Filter Tabs */}
+        <div className="bg-white rounded-lg shadow-sm">
+          <div className="border-b border-gray-200">
+            <nav className="flex -mb-px">
+              <button
+                onClick={() => setActiveTab('all')}
+                className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
+                  activeTab === 'all'
+                    ? 'border-gray-900 text-gray-900'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                All Messages
+              </button>
+              <button
+                onClick={() => setActiveTab('unread')}
+                className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
+                  activeTab === 'unread'
+                    ? 'border-gray-900 text-gray-900'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                Unread ({stats.unread})
+              </button>
+              <button
+                onClick={() => setActiveTab('fromPatients')}
+                className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
+                  activeTab === 'fromPatients'
+                    ? 'border-gray-900 text-gray-900'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                From Patients
+              </button>
+              <button
+                onClick={() => setActiveTab('fromProviders')}
+                className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
+                  activeTab === 'fromProviders'
+                    ? 'border-gray-900 text-gray-900'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                From Providers
+              </button>
+            </nav>
+          </div>
+
+          {/* Message Threads */}
+          <div className="divide-y divide-gray-200">
+            {filteredThreads.map((thread) => (
+              <div
+                key={thread.id}
+                onClick={() => handleThreadClick(thread.id)}
+                className="p-4 hover:bg-gray-50 cursor-pointer transition-colors"
+              >
+                <div className="flex items-start justify-between">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      {/* Unread indicator */}
+                      {thread.isUnread && (
+                        <span className="w-2 h-2 bg-blue-600 rounded-full flex-shrink-0"></span>
                       )}
-                      <p className={`text-xs mt-1 ${
-                        message.senderType === 'patient' ? 'text-medical-100' : 'text-slate-500'
-                      }`}>
-                        {message.timestamp}
-                        {message.senderType === 'patient' && (
-                          <span className="ml-2">✓✓</span>
-                        )}
-                      </p>
+                      <h3 className="text-sm font-semibold text-gray-900">
+                        {thread.participants.from} → {thread.participants.to}
+                      </h3>
+                      {/* Attachment indicator */}
+                      {thread.hasAttachment && (
+                        <span className="text-yellow-600" title="Has attachment">
+                          📎
+                        </span>
+                      )}
+                      {/* Urgent indicator */}
+                      {thread.isUrgent && (
+                        <span className="text-red-600" title="Urgent">
+                          🔴
+                        </span>
+                      )}
                     </div>
+                    <p className="text-sm font-medium text-gray-900 mb-1">{thread.subject}</p>
+                    <p className="text-sm text-gray-600 truncate">{thread.lastMessage}</p>
                   </div>
-                ))}
-                {isTyping && (
-                  <div className="flex justify-start">
-                    <div className="bg-slate-100 rounded-2xl rounded-bl-sm px-4 py-3">
-                      <div className="flex space-x-1">
-                        <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-                        <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-                        <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
-                      </div>
-                    </div>
+                  <div className="ml-4 flex-shrink-0 text-right">
+                    <p className="text-xs text-gray-500">{thread.timestamp}</p>
+                    <p className="text-xs text-gray-400">{thread.date}</p>
                   </div>
-                )}
-                <div ref={messagesEndRef} />
+                </div>
               </div>
+            ))}
+          </div>
 
-              {/* Input Area - Mobile Optimized */}
-              <div className="p-3 border-t border-slate-200 bg-white">
-                {attachedFiles.length > 0 && (
-                  <div className="mb-2 flex flex-wrap gap-2">
-                    {attachedFiles.map((file, index) => (
-                      <div key={index} className="bg-slate-100 rounded-lg px-3 py-1 text-xs flex items-center">
-                        <span className="truncate max-w-[150px]">{file.name}</span>
-                        <button
-                          onClick={() => removeAttachment(index)}
-                          className="ml-2 text-red-600 hover:text-red-700 text-lg"
-                        >
-                          ×
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                <div className="flex items-center gap-2">
-                  <input
-                    type="file"
-                    ref={fileInputRef}
-                    onChange={handleFileAttachment}
-                    className="hidden"
-                    multiple
-                    accept="image/*,.pdf,.doc,.docx"
-                  />
-                  <button
-                    onClick={() => fileInputRef.current?.click()}
-                    className="p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                    </svg>
-                  </button>
-                  <input
-                    type="text"
-                    value={newMessage}
-                    onChange={(e) => setNewMessage(e.target.value)}
-                    onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && handleSendMessage()}
-                    placeholder="Type your message..."
-                    className="flex-1 px-4 py-2.5 bg-slate-100 rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-medical-500 focus:bg-white transition-colors"
-                  />
-                  <button
-                    onClick={handleSendMessage}
-                    className="p-2.5 bg-medical-600 text-white rounded-full hover:bg-medical-700 transition-colors shadow-sm"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                    </svg>
-                  </button>
-                </div>
-              </div>
-            </>
-          ) : (
-            <div className="flex-1 flex items-center justify-center text-slate-500">
-              <div className="text-center p-8">
-                <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <svg className="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                  </svg>
-                </div>
-                <p className="text-slate-600 font-medium">No conversation selected</p>
-                <p className="text-sm text-slate-500 mt-1">Choose a conversation to start messaging</p>
-              </div>
+          {/* Empty state */}
+          {filteredThreads.length === 0 && (
+            <div className="p-8 text-center">
+              <p className="text-gray-500">No messages found</p>
             </div>
           )}
         </div>
