@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Card from '@/components/Card';
+import { useToast } from '@/hooks/useToast';
 
 // Common medications database
 const medicationDatabase = {
@@ -61,6 +62,7 @@ export default function ConsultationReviewPage() {
   // Patient Communication
   const [patientVisibleNote, setPatientVisibleNote] = useState('');
   const [internalProviderNote, setInternalProviderNote] = useState('');
+  const { success, error: errorToast } = useToast();
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -178,8 +180,8 @@ export default function ConsultationReviewPage() {
         }
       }
     } catch (error) {
-      console.error('AI generation error:', error);
-      alert('AI suggestions temporarily unavailable');
+  console.error('AI generation error:', error);
+  errorToast('AI suggestions temporarily unavailable');
     } finally {
       setAiLoading(false);
     }
@@ -213,11 +215,11 @@ export default function ConsultationReviewPage() {
       // Mock API call
       await new Promise(resolve => setTimeout(resolve, 1000));
       
-      alert('Treatment plan sent to patient and pharmacy!');
+      success('Treatment plan sent to patient and pharmacy');
       router.push('/portal/consultations');
     } catch (error) {
       console.error('Error:', error);
-      alert('Error sending treatment plan');
+      errorToast('Error sending treatment plan');
     } finally {
       setSending(false);
     }

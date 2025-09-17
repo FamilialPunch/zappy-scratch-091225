@@ -1,0 +1,24 @@
+{
+  "name": "zappy-scratch-091225-branch-1",
+  "version": "1.0.0",
+  "description": "A comprehensive telehealth system for async consultations between patients and healthcare providers.",
+  "main": "create-test-patient.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/FamilialPunch/zappy-scratch-091225.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/FamilialPunch/zappy-scratch-091225/issues"
+  },
+  "homepage": "https://github.com/FamilialPunch/zappy-scratch-091225#readme",
+  "dependencies": {
+    "bcryptjs": "^3.0.2",
+    "pg": "^8.16.3"
+  }
+}

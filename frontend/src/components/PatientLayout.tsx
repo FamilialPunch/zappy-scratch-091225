@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
+import { authService } from '@/lib/auth';
 
 interface MenuItem {
   name: string;
@@ -54,14 +55,18 @@ export default function PatientLayout({ children }: { children: React.ReactNode 
   useEffect(() => {
     // Don't check auth on pages that don't need layout
     if (noLayoutPages) return;
-    
-    const userData = localStorage.getItem('user');
-    if (userData) {
-      setUser(JSON.parse(userData));
-    } else {
+
+    try {
+      const current = authService.getUser();
+      if (current) {
+        setUser(current);
+      } else {
+        router.push('/patient/login');
+      }
+    } catch {
       router.push('/patient/login');
     }
-  }, [router, isLoginPage]);
+  }, [router, isLoginPage, noLayoutPages]);
 
   const primaryMenuItems: MenuItem[] = [
     {
@@ -125,7 +130,8 @@ export default function PatientLayout({ children }: { children: React.ReactNode 
   ];
 
   const handleLogout = () => {
-    localStorage.removeItem('user');
+    // Clear using authService for consistency
+    try { authService.logout(); } catch {}
     router.push('/');
   };
 

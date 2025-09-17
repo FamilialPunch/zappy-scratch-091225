@@ -89,6 +89,42 @@ export default function PatientDashboard() {
     unread_messages: 1
   };
 
+  // Handle refill request
+  const handleRefillRequest = async (program: any) => {
+    try {
+      // For mock data and MVP, always redirect to refill check-in page
+      // This avoids database issues since we're not using real prescriptions yet
+      window.location.href = `/patient/refill-checkin?prescription=${program.id}`;
+      
+      // Once real database is set up, uncomment this code:
+      /*
+      // Check if this is mock data
+      if (program.id?.startsWith('mock-')) {
+        // For mock data, redirect to refill check-in page
+        window.location.href = `/patient/refill-checkin?prescription=${program.id}`;
+        return;
+      }
+      
+      // For real data, check if we have a prescription_id
+      const prescriptionId = program.prescription_id || program.id;
+      
+      const response = await api.post(`/prescriptions/${prescriptionId}/refill`);
+      
+      // Show success message
+      alert('Refill request submitted successfully!');
+      
+      // Refresh programs to update refill information
+      const programsResponse = await api.get('/patients/me/programs');
+      setPrograms(programsResponse.data.length > 0 ? programsResponse.data : mockPrograms);
+      */
+    } catch (error: any) {
+      // Show error message
+      console.error('Refill request error:', error);
+      alert('Failed to process refill request. Redirecting to refill check-in...');
+      window.location.href = `/patient/refill-checkin?prescription=${program.id}`;
+    }
+  };
+
   // Fetch all dashboard data
   useEffect(() => {
     const fetchDashboardData = async () => {
@@ -310,8 +346,16 @@ export default function PatientDashboard() {
                   >
                     View Details
                   </Link>
-                  <button className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-800 hover:bg-slate-50">
-                    Request Refill
+                  <button 
+                    onClick={() => handleRefillRequest(activeProgram)}
+                    disabled={activeProgram.refills_remaining === 0}
+                    className={`rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${
+                      activeProgram.refills_remaining > 0
+                        ? 'border-slate-300 bg-white text-slate-800 hover:bg-slate-50 cursor-pointer'
+                        : 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed'
+                    }`}
+                  >
+                    {activeProgram.refills_remaining > 0 ? 'Request Refill' : 'No Refills Available'}
                   </button>
                 </div>
               </div>

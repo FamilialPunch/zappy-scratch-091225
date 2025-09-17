@@ -472,19 +472,29 @@ CREATE TRIGGER update_tickets_updated_at BEFORE UPDATE ON support_tickets
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- Insert sample data for testing
-INSERT INTO patients (email, password_hash, first_name, last_name, date_of_birth, gender, phone) VALUES
-    ('john.doe@example.com', '$2a$10$xxxxxxxxxxx', 'John', 'Doe', '1985-03-15', 'Male', '555-0100'),
-    ('jane.smith@example.com', '$2a$10$xxxxxxxxxxx', 'Jane', 'Smith', '1990-07-22', 'Female', '555-0101'),
-    ('bob.johnson@example.com', '$2a$10$xxxxxxxxxxx', 'Bob', 'Johnson', '1978-11-30', 'Male', '555-0102');
+-- Mock Patient Credentials:
+-- Email: patient@demo.com, Password: Patient123!
+-- Email: john.doe@example.com, Password: JohnDoe123!
+-- Email: jane.smith@example.com, Password: JaneSmith123!
+-- Email: bob.johnson@example.com, Password: BobJohnson123!
+INSERT INTO patients (email, password_hash, first_name, last_name, date_of_birth, gender, phone, shipping_address, shipping_city, shipping_state, shipping_zip, is_active) VALUES
+    ('patient@demo.com', '$2a$10$KMlQhLjV7hZRuLEl.mnZxup5njjJF5yf8VIBNxvVW/6fILSwILMJG', 'Demo', 'Patient', '1990-01-01', 'Other', '555-DEMO-001', '123 Demo Street', 'Demo City', 'CA', '90210', true),
+    ('john.doe@example.com', '$2a$10$VSpiQl1OXm2tsGmJt..7cu0OZygPWngCGndbxVrQWzYngByDc0lBu', 'John', 'Doe', '1985-03-15', 'Male', '555-0100', '456 Oak Avenue', 'Springfield', 'CA', '90211', true),
+    ('jane.smith@example.com', '$2a$10$ahpAiPpZUBLwn2JQyw2FxuOOr5Fz8B89I/gSs/p4ALHJEUQEzhrMW', 'Jane', 'Smith', '1990-07-22', 'Female', '555-0101', '789 Pine Boulevard', 'Riverside', 'CA', '90212', true),
+    ('bob.johnson@example.com', '$2a$10$b3Lrhm489vI/Oe003Xw8OOsrGQXuq2/tXUjmnKCO3KoGKUfl2K6TW', 'Bob', 'Johnson', '1978-11-30', 'Male', '555-0102', '321 Maple Drive', 'Oceanview', 'CA', '90213', true);
 
-INSERT INTO providers (email, password_text, first_name, last_name, title, license_number, license_state, specialties) VALUES
-    ('dr.smith@clinic.com', '$2a$10$xxxxxxxxxxx', 'Sarah', 'Smith', 'Dr.', 'MD123456', 'CA', ARRAY['General Medicine', 'Dermatology']),
-    ('dr.jones@clinic.com', '$2a$10$xxxxxxxxxxx', 'Michael', 'Jones', 'Dr.', 'MD789012', 'CA', ARRAY['General Medicine', 'Endocrinology']),
-    ('np.williams@clinic.com', '$2a$10$xxxxxxxxxxx', 'Emily', 'Williams', 'NP', 'NP345678', 'CA', ARRAY['Family Medicine']);
+-- Mock Provider Credentials: Password for all is 'Provider123!'
+INSERT INTO providers (email, password_hash, first_name, last_name, title, license_number, license_state, specialties, status) VALUES
+    ('dr.smith@clinic.com', '$2a$10$VSpiQl1OXm2tsGmJt..7cu0OZygPWngCGndbxVrQWzYngByDc0lBu', 'Sarah', 'Smith', 'Dr.', 'MD123456', 'CA', ARRAY['General Medicine', 'Dermatology'], 'active'),
+    ('dr.jones@clinic.com', '$2a$10$VSpiQl1OXm2tsGmJt..7cu0OZygPWngCGndbxVrQWzYngByDc0lBu', 'Michael', 'Jones', 'Dr.', 'MD789012', 'CA', ARRAY['General Medicine', 'Endocrinology'], 'active'),
+    ('np.williams@clinic.com', '$2a$10$VSpiQl1OXm2tsGmJt..7cu0OZygPWngCGndbxVrQWzYngByDc0lBu', 'Emily', 'Williams', 'NP', 'NP345678', 'CA', ARRAY['Family Medicine'], 'active');
 
-INSERT INTO admin_users (email, password_text, first_name, last_name, role) VALUES
-    ('admin@telehealth.com', '$2a$10$xxxxxxxxxxx', 'Admin', 'User', 'super_admin'),
-    ('support@telehealth.com', '$2a$10$xxxxxxxxxxx', 'Support', 'Team', 'support');
+-- Mock Admin Credentials:
+-- Email: admin@telehealth.com, Password: Admin123!
+-- Email: support@telehealth.com, Password: Support123!
+INSERT INTO admin_users (email, password_hash, first_name, last_name, role) VALUES
+    ('admin@telehealth.com', '$2a$10$0tHlfcBjzPGSaQpN.Giy1uE.aeq.zbI75W.uVpw2H8V42RtkY5OsO', 'Admin', 'User', 'super_admin'),
+    ('support@telehealth.com', '$2a$10$Hzd2A0tjjYknzRJREoN25ObhfZa.50fHEsvHK3SbrVPmyKLwdz/R2', 'Support', 'Team', 'support');
 
 -- Sample inventory
 INSERT INTO inventory (sku, medication_name, generic_name, strength, form, quantity_on_hand, cost_per_unit, retail_price, subscription_price, category) VALUES

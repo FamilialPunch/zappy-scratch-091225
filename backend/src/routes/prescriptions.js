@@ -87,6 +87,45 @@ router.get('/', requireAdmin, asyncHandler(async (req, res) => {
 // Get single prescription details
 router.get('/:id', requireAuth, asyncHandler(async (req, res) => {
   const { id } = req.params;
+  
+  // Handle mock prescriptions for demo/MVP
+  if (id.startsWith('mock-')) {
+    const mockPrescriptions = {
+      'mock-1': {
+        id: 'mock-1',
+        medication_name: 'Tretinoin + Doxycycline',
+        category: 'acne',
+        dosage: '0.05% cream + 100mg',
+        frequency: 'Nightly + Twice daily',
+        quantity: 30,
+        refills: 2,
+        status: 'active',
+        patient_id: req.user.id,
+        created_at: new Date(Date.now() - 45 * 24 * 60 * 60 * 1000)
+      },
+      'mock-2': {
+        id: 'mock-2',
+        medication_name: 'Semaglutide',
+        category: 'weight-loss',
+        dosage: '0.5mg',
+        frequency: 'Once weekly',
+        quantity: 4,
+        refills: 5,
+        status: 'active',
+        patient_id: req.user.id,
+        created_at: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+      }
+    };
+    
+    const mockPrescription = mockPrescriptions[id];
+    if (mockPrescription) {
+      return res.json({
+        success: true,
+        data: mockPrescription
+      });
+    }
+  }
+  
   const db = getDatabase();
   
   const result = await db.query(`

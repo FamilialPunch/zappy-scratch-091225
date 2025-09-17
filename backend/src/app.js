@@ -32,6 +32,7 @@ import adminPatientsRoutes from './routes/admin-patients.js';
 import webhookRoutes from './routes/webhooks.js';
 import treatmentPlanRoutes from './routes/treatment-plans.js';
 import aiConsultationRoutes from './routes/ai-consultation.js';
+import refillCheckinRoutes from './routes/refill-checkins.js';
 
 // Import socket handlers
 import { setupSocketHandlers } from './sockets/index.js';
@@ -124,6 +125,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/admin/patients', adminPatientsRoutes);
 app.use('/api/treatment-plans', treatmentPlanRoutes);
 app.use('/api/ai-consultation', aiConsultationRoutes);
+app.use('/api/refill-checkins', refillCheckinRoutes);
 
 // 404 handler
 app.use('*', (req, res) => {

@@ -70,7 +70,7 @@ class AuthService {
     shippingState?: string;
     shippingZip?: string;
   }): Promise<AuthResponse> {
-    const response = await api.post('/auth/register/patient', data);
+    const response = await api.post('/api/auth/register/patient', data);
     
     if (response.data?.data) {
       this.setTokens(response.data.data);
@@ -86,7 +86,7 @@ class AuthService {
    * Patient Login (Simple email/password)
    */
   async loginPatient(email: string, password: string): Promise<AuthResponse> {
-    const response = await api.post('/auth/login/patient', { email, password });
+    const response = await api.post('/api/auth/login/patient', { email, password });
     
     if (response.data?.data) {
       this.setTokens(response.data.data);
@@ -102,7 +102,7 @@ class AuthService {
    * Provider Login (Medical professionals)
    */
   async loginProvider(email: string, password: string): Promise<AuthResponse> {
-    const response = await api.post('/auth/login/provider', { email, password });
+    const response = await api.post('/api/auth/login/provider', { email, password });
     
     if (response.data?.data) {
       this.setTokens(response.data.data);
@@ -118,7 +118,7 @@ class AuthService {
    * Admin Login (with optional 2FA)
    */
   async loginAdmin(email: string, password: string, twoFactorCode?: string): Promise<AuthResponse | { requiresTwoFactor: boolean }> {
-    const response = await api.post('/auth/login/admin', { 
+    const response = await api.post('/api/auth/login/admin', { 
       email, 
       password, 
       twoFactorCode 
@@ -165,7 +165,7 @@ class AuthService {
     submittedAt: string;
     message: string;
   }> {
-    const response = await api.post('/auth/intake', data);
+    const response = await api.post('/api/auth/intake', data);
     return response.data?.data || response.data;
   }
 
@@ -180,7 +180,7 @@ class AuthService {
     }
 
     try {
-      const response = await api.post('/auth/refresh', { refreshToken });
+      const response = await api.post('/api/auth/refresh', { refreshToken });
       
       if (response.data?.data) {
         this.setTokens(response.data.data);
@@ -200,14 +200,14 @@ class AuthService {
    * Request password reset
    */
   async forgotPassword(email: string, userType: UserRole): Promise<void> {
-    await api.post('/auth/forgot-password', { email, userType });
+    await api.post('/api/auth/forgot-password', { email, userType });
   }
 
   /**
    * Reset password with token
    */
   async resetPassword(token: string, password: string, userType: UserRole): Promise<void> {
-    await api.post('/auth/reset-password', { token, password, userType });
+    await api.post('/api/auth/reset-password', { token, password, userType });
   }
 
   /**
@@ -222,7 +222,7 @@ class AuthService {
     }
 
     try {
-      const response = await api.get('/auth/me');
+      const response = await api.get('/api/auth/me');
       
       if (response.data?.data) {
         this.setUser(response.data.data);
@@ -233,7 +233,7 @@ class AuthService {
       const refreshed = await this.refreshToken();
       
       if (refreshed) {
-        const response = await api.get('/auth/me');
+        const response = await api.get('/api/auth/me');
         if (response.data?.data) {
           this.setUser(response.data.data);
           return response.data.data;
@@ -251,7 +251,7 @@ class AuthService {
    */
   async logout(): Promise<void> {
     try {
-      await api.post('/auth/logout');
+      await api.post('/api/auth/logout');
     } catch (error) {
       // Continue with local logout even if API call fails
     }

@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Card from '@/components/Card';
 import { format } from 'date-fns';
+import NewConsultationForm from '@/components/NewConsultationForm';
+import { useToast } from '@/hooks/useToast';
 
 // Types
 interface Patient {
@@ -150,6 +152,8 @@ export default function PatientDetailsContent({ patientId }: PatientDetailsConte
   const router = useRouter();
   const [activeTab, setActiveTab] = useState('overview');
   const [loading, setLoading] = useState(true);
+  const [showNewConsultation, setShowNewConsultation] = useState(false);
+  const { success } = useToast();
   
   // Patient data states
   const [patient, setPatient] = useState<Patient | null>(null);
@@ -471,7 +475,11 @@ export default function PatientDetailsContent({ patientId }: PatientDetailsConte
           
           {/* Quick Actions */}
           <div className="flex gap-2">
-            <button className="px-3 py-1.5 bg-gray-900 text-white text-sm rounded-lg hover:bg-gray-800">
+            {/* Open passive New Consultation modal */}
+            <button 
+              onClick={() => setShowNewConsultation(true)}
+              className="px-3 py-1.5 bg-gray-900 text-white text-sm rounded-lg hover:bg-gray-800"
+            >
               Start Consultation
             </button>
             <button className="px-3 py-1.5 border border-gray-300 text-sm rounded-lg hover:bg-gray-50">
@@ -904,6 +912,39 @@ export default function PatientDetailsContent({ patientId }: PatientDetailsConte
           </div>
         )}
       </div>
+      {/* Passive New Consultation Modal */}
+      {showNewConsultation && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="w-full max-w-3xl max-h-[90vh] overflow-y-auto bg-white rounded-xl shadow-xl border border-gray-200 p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-lg font-semibold text-gray-900">New Consultation</h2>
+              <button
+                onClick={() => setShowNewConsultation(false)}
+                className="p-1.5 rounded hover:bg-gray-100 text-gray-500"
+                aria-label="Close"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <NewConsultationForm
+              initialPatient={patient ? { id: patient.id, name: `${patient.first_name} ${patient.last_name}` } : null}
+              onCancel={() => setShowNewConsultation(false)}
+              onCreated={() => {
+                setShowNewConsultation(false);
+                success('Consultation created successfully');
+                // Optionally refresh consultations list locally or navigate
+              }}
+              mode="modal"
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
+// Modal Overlay for New Consultation
+// Rendered at the end to avoid layout issues
+// Note: Keeping styling consistent with other passive modals in the portal

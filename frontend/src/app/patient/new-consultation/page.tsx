@@ -27,6 +27,7 @@ export default function NewConsultation() {
   const [additionalInfo, setAdditionalInfo] = useState('');
   const [urgency, setUrgency] = useState('regular');
   const [preferredTime, setPreferredTime] = useState('');
+  const [hasConsented, setHasConsented] = useState(false);
 
   // Consultation type options
   const consultationTypes = [
@@ -540,8 +541,13 @@ export default function NewConsultation() {
             </button>
           ) : (
             <div className="space-y-4">
-              <label className="flex items-start">
-                <input type="checkbox" className="mt-1 mr-3" required />
+              <label className="flex items-start cursor-pointer">
+                <input 
+                  type="checkbox" 
+                  className="mt-1 mr-3" 
+                  checked={hasConsented}
+                  onChange={(e) => setHasConsented(e.target.checked)}
+                />
                 <span className="text-sm text-gray-600">
                   I understand that this consultation is not for emergency medical conditions. 
                   I consent to share my health information with licensed healthcare providers 
@@ -550,7 +556,12 @@ export default function NewConsultation() {
               </label>
               <button
                 onClick={handleSubmit}
-                className="bg-purple-600 text-white px-8 py-3 rounded-full font-semibold hover:bg-purple-700 transition-all"
+                disabled={!hasConsented}
+                className={`px-8 py-3 rounded-full font-semibold transition-all ${
+                  hasConsented
+                    ? 'bg-purple-600 text-white hover:bg-purple-700 cursor-pointer'
+                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                }`}
               >
                 Submit Consultation Request
               </button>

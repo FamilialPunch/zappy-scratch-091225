@@ -121,10 +121,22 @@ export const apiClient = new ApiClient();
 
 // Export a simpler api object for easier use
 export const api = {
-  get: (url: string, config?: any) => apiClient.client.get(url, config),
-  post: (url: string, data?: any, config?: any) => apiClient.client.post(url, data, config),
-  put: (url: string, data?: any, config?: any) => apiClient.client.put(url, data, config),
-  delete: (url: string, config?: any) => apiClient.client.delete(url, config),
+  // Ensure requests hit backend '/api' mount when callers use shorthand paths like '/patients/me'
+  get: (url: string, config?: any) => apiClient.client.get(withApiPrefix(url), config),
+  post: (url: string, data?: any, config?: any) => apiClient.client.post(withApiPrefix(url), data, config),
+  put: (url: string, data?: any, config?: any) => apiClient.client.put(withApiPrefix(url), data, config),
+  delete: (url: string, config?: any) => apiClient.client.delete(withApiPrefix(url), config),
   // Direct access to client for complex operations
   client: apiClient.client,
 };
+
+// Helper: add '/api' prefix when missing for relative paths
+function withApiPrefix(url: string): string {
+  // Leave absolute URLs untouched
+  if (/^https?:\/\//i.test(url)) return url;
+  // Already has '/api' prefix
+  if (url.startsWith('/api/')) return url;
+  // Normalize leading slash
+  const normalized = url.startsWith('/') ? url : `/${url}`;
+  return `/api${normalized}`;
+}

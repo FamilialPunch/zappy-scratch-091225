@@ -7,11 +7,13 @@ import { api } from '@/lib/api';
 export default function RefillCheckIn() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const prescriptionId = searchParams.get('prescription');
+  // Support both 'prescription' and 'prescriptionId' to be robust with different link sources
+  const prescriptionId = searchParams.get('prescription') || searchParams.get('prescriptionId');
   
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [prescription, setPrescription] = useState<any>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [responses, setResponses] = useState<any>({});
   const [sideEffects, setSideEffects] = useState<any[]>([]);
   const [redFlags, setRedFlags] = useState<string[]>([]);
@@ -61,17 +63,36 @@ export default function RefillCheckIn() {
   };
 
   useEffect(() => {
-    if (prescriptionId) {
-      fetchPrescription();
-    }
+    // Always fetch/set prescription data (mock or real)
+    fetchPrescription();
   }, [prescriptionId]);
 
   const fetchPrescription = async () => {
     try {
+      // For demo/MVP, use mock data if no prescriptionId
+      if (!prescriptionId) {
+        setPrescription({
+          id: 'demo-prescription-001',
+          medication_name: 'Semaglutide',
+          category: 'weight-loss',
+          dosage: '0.5mg',
+          frequency: 'Once weekly'
+        });
+        return;
+      }
+      
       const response = await api.get(`/prescriptions/${prescriptionId}`);
       setPrescription(response.data);
     } catch (error) {
       console.error('Error fetching prescription:', error);
+      // Fallback to mock data for demo
+      setPrescription({
+        id: prescriptionId || 'demo-prescription-001',
+        medication_name: 'Semaglutide',
+        category: 'weight-loss',
+        dosage: '0.5mg',
+        frequency: 'Once weekly'
+      });
     }
   };
 
@@ -105,9 +126,14 @@ export default function RefillCheckIn() {
 
   const submitCheckIn = async () => {
     setLoading(true);
+    setSubmitError(null);
+    
+    // Use a mock prescriptionId for demo if none provided
+    const effectivePrescriptionId = prescriptionId || 'demo-prescription-001';
+    
     try {
       const checkInData = {
-        prescription_id: prescriptionId,
+        prescription_id: effectivePrescriptionId,
         responses,
         side_effects: sideEffects,
         has_red_flags: redFlags.length > 0,
@@ -123,8 +149,18 @@ export default function RefillCheckIn() {
       } else {
         router.push('/patient/dashboard?checkin=complete');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error submitting check-in:', error);
+      // Show specific validation errors if available
+      if (error.response?.data?.errors) {
+        const validationErrors = error.response.data.errors;
+        const errorMessages = validationErrors.map((err: any) => err.msg || err.message).join(', ');
+        setSubmitError(`Validation error: ${errorMessages}`);
+      } else if (error.response?.data?.error) {
+        setSubmitError(error.response.data.error);
+      } else {
+        setSubmitError('We could not submit your check-in. Please try again in a moment.');
+      }
     } finally {
       setLoading(false);
     }
@@ -155,6 +191,11 @@ export default function RefillCheckIn() {
 
         {/* Check-in Steps */}
         <div className="bg-white rounded-lg shadow-lg p-6">
+          {submitError && (
+            <div className="mb-4 p-3 rounded border border-red-200 bg-red-50 text-sm text-red-800">
+              {submitError}
+            </div>
+          )}
           {/* Step 1: General Health */}
           {step === 1 && (
             <div className="space-y-6">
